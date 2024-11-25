@@ -64,7 +64,7 @@ void print_char(char c)
         return;
     }
 
-    if (col > NUM_COLS)
+    if (col >= NUM_COLS)
     {
         print_newline();
     }
@@ -90,4 +90,143 @@ void print_str(char *str)
 void print_set_color(char foreground, char background)
 {
     color = foreground + (background << 4);
+}
+
+char *itoa(int value, int base)
+{
+    static char buffer[32];
+    char *ptr = &buffer[31];
+    *ptr = '\0';
+
+    int is_negative = (value < 0 && base == 10);
+    if (is_negative)
+    {
+        value = -value;
+    }
+
+    do
+    {
+        int digit = value % base;
+        *--ptr = (digit < 10) ? '0' + digit : 'A' + (digit - 10);
+        value /= base;
+    } while (value);
+
+    if (is_negative)
+    {
+        *--ptr = '-';
+    }
+
+    return ptr;
+}
+
+void printf(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+
+    for (size_t i = 0; format[i] != '\0'; i++)
+    {
+        if (format[i] == '%')
+        {
+            i++; // Move past '%'
+
+            // Parse width specifier (optional)
+            int width = 0;
+            while (format[i] >= '0' && format[i] <= '9')
+            {
+                width = width * 10 + (format[i] - '0');
+                i++;
+            }
+
+            // Handle format specifier
+            switch (format[i])
+            {
+            case 'c':
+            { // Character
+                char c = (char)va_arg(args, int);
+                if (width > 1)
+                {
+                    for (int pad = 0; pad < width - 1; pad++)
+                        print_char(' ');
+                }
+                print_char(c);
+                break;
+            }
+            case 's':
+            { // String
+                const char *str = va_arg(args, const char *);
+                int len = 0;
+                while (str[len] != '\0')
+                    len++; // Calculate string length
+                if (width > len)
+                {
+                    for (int pad = 0; pad < width - len; pad++)
+                        print_char(' ');
+                }
+                print_str(str);
+                break;
+            }
+            case 'd':
+            { // Decimal number
+                int num = va_arg(args, int);
+                char *num_str = itoa(num, 10); // Convert number to string
+                int len = 0;
+                while (num_str[len] != '\0')
+                    len++; // Calculate string length
+                if (width > len)
+                {
+                    for (int pad = 0; pad < width - len; pad++)
+                        print_char(' ');
+                }
+                print_str(num_str);
+                break;
+            }
+            case 'x':
+            case 'X':
+            { // Hexadecimal number
+                int num = va_arg(args, int);
+                char *hex_str = itoa(num, 16); // Convert number to hex string
+                int len = 0;
+                while (hex_str[len] != '\0')
+                    len++; // Calculate string length
+                if (width > len)
+                {
+                    for (int pad = 0; pad < width - len; pad++)
+                        print_char(' ');
+                }
+                print_str(hex_str);
+                break;
+            }
+            case 'p':
+            { // Pointer
+                uintptr_t ptr = va_arg(args, uintptr_t);
+                print_str("0x");
+                char *ptr_str = itoa(ptr, 16); // Convert pointer to string
+                int len = 0;
+                while (ptr_str[len] != '\0')
+                    len++; // Calculate string length
+                if (width > len)
+                {
+                    for (int pad = 0; pad < width - len; pad++)
+                        print_char(' ');
+                }
+                print_str(ptr_str);
+                break;
+            }
+            case '%': // Literal '%'
+                print_char('%');
+                break;
+            default: // Unsupported format specifier
+                print_char('%');
+                print_char(format[i]);
+                break;
+            }
+        }
+        else
+        {
+            print_char(format[i]); // Print non-format characters
+        }
+    }
+
+    va_end(args);
 }

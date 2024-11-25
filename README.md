@@ -32,7 +32,7 @@ docker run --rm -it -v $(pwd):/root/env my-os
 make build-x86_64
 ```
 
-### 5. Run the iso
+### 5. Run the iso OUSIDE THE CONTAINER (File will be created in `dist/x86_64` in the root of the project)
 
 ```bash
 qemu-system-x86_64 -cdrom dist/x86_64/kernel.iso

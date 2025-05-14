@@ -1,19 +1,39 @@
+#include <stdint.h>
 #include "print.h"
-#include "interuptHandler.h"
-#include "test.h"
+#include "keyboard.h"
+#include "idt.h"
+#include "pic.h"
+#include "safeInterrupt.h"
+#include "shell.h"
+
+// Simple delay function
+void delay(uint64_t ticks)
+{
+    for (uint64_t i = 0; i < ticks; i++)
+    {
+        // Simple delay loop
+        asm volatile("nop");
+    }
+}
 
 void kernel_main()
 {
-    print_clear();
-    print_set_color(PRINT_COLOR_WHITE, PRINT_COLOR_BLACK);
-    // print_str("hello world \n\n another Test");
+    // Print welcome message
+    print_str("OS Kernel: Loading...\n");
+    init_interrupts_safe();
+    keyboard_init();
 
-    printf("hello world %d\n %s\n", 123, "hello");
-    printf("works");
+    enable_interrupts();
 
-    // fib(10);
-    // printf("\n");
-    // triangle(10);
+    print_str("\nKeyboard Ready! Type something:\n");
 
-    // wait_for_key();
+    // Run the shell
+    shell_run();
+
+    // This code should never be reached
+    while (1)
+    {
+        // Idle loop
+        asm volatile("hlt");
+    }
 }

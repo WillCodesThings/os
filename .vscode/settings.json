@@ -1,0 +1,7 @@
+{
+  "files.associations": {
+    "*.ASM": "fasm",
+    "keyboard.h": "c",
+    "stddef.h": "c"
+  }
+}

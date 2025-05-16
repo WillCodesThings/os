@@ -2,6 +2,14 @@
   "files.associations": {
     "*.ASM": "fasm",
     "keyboard.h": "c",
-    "stddef.h": "c"
+    "stddef.h": "c",
+    "idt.h": "c",
+    "pic.h": "c",
+    "safeinterrupt.h": "c",
+    "port_io.h": "c",
+    "shell.h": "c",
+    "print.h": "c",
+    "test.h": "c",
+    "drawtest.h": "c"
   }
 }

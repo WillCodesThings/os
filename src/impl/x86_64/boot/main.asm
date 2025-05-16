@@ -1,14 +1,30 @@
 global start
 extern long_mode_start
 
+section .data
+; Define a structure for VBE mode info at a fixed address
+vbe_mode_info: equ 0x00090000  ; Fixed address for VBE info
+
+; Variables to store graphics mode information
+global framebuffer_address, screen_width, screen_height, bits_per_pixel, pitch
+framebuffer_address: dd 0      ; Linear framebuffer physical address
+screen_width:       dw 0       ; Screen width in pixels
+screen_height:      dw 0       ; Screen height in pixels  
+bits_per_pixel:     db 0       ; Bits per pixel
+pitch:              dw 0       ; Bytes per scanline
+
 section .text
 bits 32
+global start:
 start:
 	mov esp, stack_top
 
 	call check_multiboot
 	call check_cpuid
 	call check_long_mode
+
+	; --- Setup VESA graphics mode before paging ---
+    ; call setup_vesa_graphics
 
 	call setup_page_tables
 	call enable_paging
@@ -17,6 +33,52 @@ start:
 	jmp gdt64.code_segment:long_mode_start
 
 	hlt
+
+; --- VESA graphics setup routine ---
+; setup_vesa_graphics:
+;     ; Set VESA mode 0x118 (1024x768x32bpp) with linear framebuffer
+;     mov ax, 0x4F02
+;     mov bx, 0x118 | 0x4000    ; Mode 0x118 + linear framebuffer flag
+;     int 0x10
+;     cmp ax, 0x004F
+;     jne vesa_error
+
+;     ; Get VESA mode info
+;     ; Set ES:DI to point to our VBE info structure buffer
+;     mov di, vbe_mode_info     ; Destination address for mode info
+;     mov ax, 0x4F01            ; VBE get mode info
+;     mov cx, 0x118             ; Mode we want info about
+;     int 0x10
+;     cmp ax, 0x004F
+;     jne vesa_error
+
+;     ; Store relevant info in our variables
+;     ; Note: We access the mode info structure directly
+;     ; framebuffer at offset 0x28
+;     mov eax, [vbe_mode_info + 0x28]
+;     mov [framebuffer_address], eax
+
+;     ; screen width at offset 0x12
+;     mov ax, [vbe_mode_info + 0x12]
+;     mov [screen_width], ax
+
+;     ; screen height at offset 0x14
+;     mov ax, [vbe_mode_info + 0x14]
+;     mov [screen_height], ax
+
+;     ; bits per pixel at offset 0x19
+;     mov al, [vbe_mode_info + 0x19]
+;     mov [bits_per_pixel], al
+
+;     ; pitch (bytes per scanline) at offset 0x10
+;     mov ax, [vbe_mode_info + 0x10]
+;     mov [pitch], ax
+
+;     ret
+
+; vesa_error:
+;     mov al, "V"
+;     jmp error
 
 check_multiboot:
 	cmp eax, 0x36d76289

@@ -1,7 +1,7 @@
-#include "shell.h"
-#include "print.h"
-#include "keyboard.h"
 #include <stdint.h>
+#include <shell/shell.h>
+#include <shell/print.h>
+#include <interrupts/io/keyboard.h>
 
 // Constants
 #define MAX_COMMAND_LENGTH 64

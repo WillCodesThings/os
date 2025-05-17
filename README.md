@@ -24,6 +24,9 @@ docker run --rm -it -v $(pwd):/root/env my-os
 
 # MacOS
 docker run --rm -it -v $(pwd):/root/env my-os
+
+#nushell
+let path = (pwd); docker run --rm -it -v $"($path):/root/env" my-os
 ```
 
 ### 4. Run Makefile _IN THE CONTAINER_

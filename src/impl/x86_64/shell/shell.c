@@ -190,8 +190,14 @@ void shell_run(void)
         if (keyboard_available())
         {
             char c = keyboard_read();
+            if (c == "\b")
+            {
+            }
             shell_process_char(c);
-            print_char(c); // Echo the character
+            if (c >= 32 && c != 127) // printable ASCII only
+            {
+                print_char(c);
+            }
         }
     }
 }

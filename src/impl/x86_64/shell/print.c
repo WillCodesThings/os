@@ -72,6 +72,24 @@ void print_char(char c)
         print_newline();
         return;
     }
+    else if (c == '\b')
+    {
+        // Handle backspace
+        if (col > 0)
+        {
+            col--;
+        }
+        else if (row > 0)
+        {
+            row--;
+            col = NUM_COLS - 1;
+        }
+        buffer[row * NUM_COLS + col] = (struct Char){
+            character : ' ',
+            color : color
+        };
+        return;
+    }
 
     if (col >= NUM_COLS)
     {

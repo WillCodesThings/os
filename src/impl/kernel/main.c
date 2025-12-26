@@ -17,13 +17,16 @@ void delay(uint64_t ticks)
     }
 }
 
+// extern volatile uint32_t framebuffer_address;
+// extern volatile uint16_t pitch;
+
 void kernel_main()
 {
-    // Initialize mode info variables from assembly data
-    // get_mode_info();
 
-    // // Cast framebuffer physical address to pointer
-    // // Note: This assumes identity mapping or that the framebuffer is already mapped
+    // init_graphics();
+
+    // Cast framebuffer physical address to pointer
+    // Note: This assumes identity mapping or that the framebuffer is already mapped
     // uint32_t *fb = (uint32_t *)(uintptr_t)framebuffer_address;
 
     // // Draw a test pattern to confirm graphics are working
@@ -37,7 +40,6 @@ void kernel_main()
     // // Blue rectangle at (250,300), size 200x100 pixels
     // fillrect(fb, pitch, 250, 300, 200, 100, 0x00, 0x00, 0xFF);
 
-    // You could add additional initialization here
     // For example:
     // init_interrupts_safe();
     // keyboard_init();
@@ -45,10 +47,10 @@ void kernel_main()
     // shell_run();
 
     // Hang or continue with other kernel tasks
-    // while (1)
-    // {
-    //     asm("hlt");
-    // }
+    while (1)
+    {
+        asm("hlt");
+    }
 
     // Print welcome message
     print_str("OS Kernel: Loading...\n");

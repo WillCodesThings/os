@@ -5,13 +5,16 @@ section .data
 ; Define a structure for VBE mode info at a fixed address
 vbe_mode_info: equ 0x00090000  ; Fixed address for VBE info
 
-; Variables to store graphics mode information
-global framebuffer_address, screen_width, screen_height, bits_per_pixel, pitch
-framebuffer_address: dd 0      ; Linear framebuffer physical address
-screen_width:       dw 0       ; Screen width in pixels
-screen_height:      dw 0       ; Screen height in pixels  
-bits_per_pixel:     db 0       ; Bits per pixel
-pitch:              dw 0       ; Bytes per scanline
+; External C function declarations
+extern find_best_vesa_mode
+extern set_vesa_mode
+; External C variable declarations
+extern selected_mode
+extern framebuffer_address
+extern screen_width
+extern screen_height
+extern bits_per_pixel
+extern pitch
 
 section .text
 bits 32
@@ -24,7 +27,10 @@ start:
 	call check_long_mode
 
 	; --- Setup VESA graphics mode before paging ---
-    ; call setup_vesa_graphics
+    call setup_vesa_graphics
+
+	; Now map framebuffer in higher-half kernel space
+	call map_framebuffer
 
 	call setup_page_tables
 	call enable_paging
@@ -36,49 +42,74 @@ start:
 
 ; --- VESA graphics setup routine ---
 ; setup_vesa_graphics:
-;     ; Set VESA mode 0x118 (1024x768x32bpp) with linear framebuffer
-;     mov ax, 0x4F02
-;     mov bx, 0x118 | 0x4000    ; Mode 0x118 + linear framebuffer flag
-;     int 0x10
-;     cmp ax, 0x004F
-;     jne vesa_error
-
-;     ; Get VESA mode info
-;     ; Set ES:DI to point to our VBE info structure buffer
-;     mov di, vbe_mode_info     ; Destination address for mode info
-;     mov ax, 0x4F01            ; VBE get mode info
-;     mov cx, 0x118             ; Mode we want info about
-;     int 0x10
-;     cmp ax, 0x004F
-;     jne vesa_error
-
-;     ; Store relevant info in our variables
-;     ; Note: We access the mode info structure directly
-;     ; framebuffer at offset 0x28
-;     mov eax, [vbe_mode_info + 0x28]
-;     mov [framebuffer_address], eax
-
-;     ; screen width at offset 0x12
-;     mov ax, [vbe_mode_info + 0x12]
-;     mov [screen_width], ax
-
-;     ; screen height at offset 0x14
-;     mov ax, [vbe_mode_info + 0x14]
-;     mov [screen_height], ax
-
-;     ; bits per pixel at offset 0x19
-;     mov al, [vbe_mode_info + 0x19]
-;     mov [bits_per_pixel], al
-
-;     ; pitch (bytes per scanline) at offset 0x10
-;     mov ax, [vbe_mode_info + 0x10]
-;     mov [pitch], ax
-
-;     ret
+; 	; Find the best available VESA mode for our desired resolution (1920x1080x32)
+; 	call find_best_vesa_mode
+	
+; 	; Check if we found a valid mode
+; 	test ax, ax
+; 	jz vesa_error
+	
+; 	; Store the selected mode
+; 	mov [selected_mode], ax
+	
+; 	; Set the mode
+; 	push ax
+; 	call set_vesa_mode
+; 	add esp, 4
+	
+; 	; Check for errors
+; 	test eax, eax
+; 	jnz vesa_error
+	
+; 	ret
 
 ; vesa_error:
-;     mov al, "V"
-;     jmp error
+; 	mov al, "V"
+; 	jmp error
+
+; Map framebuffer in page tables
+map_framebuffer:
+	; Get framebuffer address
+	mov eax, [framebuffer_address]
+	test eax, eax
+	jz .skip_mapping  ; Skip if no framebuffer
+
+	; Calculate how many 2MB pages we need
+	; Get total framebuffer size (height * pitch)
+	movzx ecx, word [screen_height]
+	movzx edx, word [pitch]
+	mul ecx
+	mov ecx, edx
+	
+	; Divide by 2MB (0x200000) to get number of pages 
+	; and add 1 to round up
+	add eax, 0x1FFFFF
+	shr eax, 21
+	
+	; Store number of pages needed in ecx
+	mov ecx, eax
+	
+	; Now map each page
+	mov eax, [framebuffer_address]
+	and eax, 0xFFE00000  ; Align to 2MB boundary
+	
+	; Map the framebuffer pages in the page table
+	; For simplicity, we'll use 1:1 mapping for now
+	mov edx, eax  ; Physical address
+	or edx, 0b10000011  ; present, writable, huge page
+	
+	; Find a free spot in page table L2
+	mov edi, page_table_l2
+	add edi, 512 * 8  ; Skip first 512 entries (used by kernel)
+	
+.map_page:
+	mov [edi], edx
+	add edi, 8      ; Next page table entry
+	add edx, 0x200000  ; Next physical 2MB
+	loop .map_page
+	
+.skip_mapping:
+	ret
 
 check_multiboot:
 	cmp eax, 0x36d76289

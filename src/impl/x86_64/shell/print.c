@@ -114,6 +114,32 @@ void print_str(char *str)
     }
 }
 
+void print_int(int num)
+{
+    char buffer[12]; // Enough for 32-bit int in decimal
+    char *ptr = &buffer[11];
+    *ptr = '\0';
+
+    int is_negative = (num < 0);
+    if (is_negative)
+    {
+        num = -num;
+    }
+
+    do
+    {
+        *--ptr = (num % 10) + '0';
+        num /= 10;
+    } while (num);
+
+    if (is_negative)
+    {
+        *--ptr = '-';
+    }
+
+    print_str(ptr);
+}
+
 void print_set_color(char foreground, char background)
 {
     color = foreground + (background << 4);

@@ -1,59 +1,42 @@
-#ifndef DRAWTEST_H
-#define DRAWTEST_H
+// #include <stdint.h>
+// struct ModeInfoBlock
+// {
+//     uint16_t ModeAttributes;           /* Mode attributes */
+//     unsigned char WinAAttributes;      /* Window A attributes */
+//     unsigned char WinBAttributes;      /* Window B attributes */
+//     uint16_t WinGranularity;           /* Window granularity in k */
+//     uint16_t WinSize;                  /* Window size in k */
+//     uint16_t WinASegment;              /* Window A segment */
+//     uint16_t WinBSegment;              /* Window B segment */
+//     uint32_t WinFunctionPointer;       /* Pointer to window function */
+//     uint16_t BytesPerScanLine;         /* Bytes per scanline */
+//     uint16_t XResolution;              /* Horizontal resolution */
+//     uint16_t YResolution;              /* Vertical resolution */
+//     unsigned char XCharSize;           /* Character cell width */
+//     unsigned char YCharSize;           /* Character cell height */
+//     unsigned char NumberOfPlanes;      /* Number of memory planes */
+//     unsigned char BitsPerPixel;        /* Bits per pixel */
+//     unsigned char NumberOfBanks;       /* Number of CGA style banks */
+//     unsigned char MemoryModel;         /* Memory model type */
+//     unsigned char BankSize;            /* Size of CGA style banks */
+//     unsigned char NumberOfImagePages;  /* Number of images pages */
+//     unsigned char res1;                /* Reserved */
+//     unsigned char RedMaskSize;         /* Size of direct color red mask */
+//     unsigned char RedFieldPosition;    /* Bit posn of lsb of red mask */
+//     unsigned char GreenMaskSize;       /* Size of direct color green mask */
+//     unsigned char GreenFieldPosition;  /* Bit posn of lsb of green mask */
+//     unsigned char BlueMaskSize;        /* Size of direct color blue mask */
+//     unsigned char BlueFieldPosition;   /* Bit posn of lsb of blue mask */
+//     unsigned char RsvdMaskSize;        /* Size of direct color res mask */   
+//     unsigned char RsvdFieldPosition;   /* Bit posn of lsb of res mask */
+//     unsigned char DirectColorModeInfo; /* Direct color mode attributes */
+//     unsigned char res2[216];           /* Pad to 256 byte block size */
 
-#include <stdint.h>
+//     // Application Programming Considerations
+//     //     VBE CORE FUNCTIONS VERSION 2.0 Page 77 DOCUMENT REVISION 1.1
+// } __attribute__((packed));
 
-#define VBE_MODE 0x118 // 1024x768x32bpp
+// ModeInfoBlock *mib = (ModeInfoBlock *)0x00095000; // Placeholder address
 
-// VBE Mode Info structure (partial, packed to match VBE spec)
-typedef struct
-{
-    uint16_t attributes;
-    uint8_t winA, winB;
-    uint16_t granularity;
-    uint16_t winsize;
-    uint16_t segmentA;
-    uint16_t segmentB;
-    uint32_t realFctPtr;
-    uint16_t pitch;
-    uint16_t XResolution;
-    uint16_t YResolution;
-    uint8_t XCharSize;
-    uint8_t YCharSize;
-    uint8_t planes;
-    uint8_t bpp;
-    uint8_t banks;
-    uint8_t memory_model;
-    uint8_t bank_size;
-    uint8_t image_pages;
-    uint8_t reserved0;
-    uint8_t red_mask;
-    uint8_t red_position;
-    uint8_t green_mask;
-    uint8_t green_position;
-    uint8_t blue_mask;
-    uint8_t blue_position;
-    uint8_t reserved_mask;
-    uint8_t reserved_position;
-    uint8_t direct_color_attributes;
-    uint32_t framebuffer; // physical address of framebuffer
-} __attribute__((packed)) VbeModeInfo;
-
-extern volatile VbeModeInfo *vbe_mode_info;
-extern volatile uint32_t framebuffer_address;
-extern volatile uint16_t screen_width;
-extern volatile uint16_t screen_height;
-extern volatile uint8_t bits_per_pixel;
-extern volatile uint16_t pitch;
-
-// Get VBE mode info (usually done in assembly)
-void get_mode_info(void);
-
-// Draw a single pixel (32-bit color) at (x,y)
-void putpixel(uint32_t *framebuffer, int x, int y, int pitch, uint32_t color);
-
-// Draw a filled rectangle with RGB color
-void fillrect(uint32_t *framebuffer, int pitch, int x, int y, int w, int h,
-              uint8_t r, uint8_t g, uint8_t b);
-
-#endif // DRAWTEST_H
+// void init_graphics();
+// void put_pixel(uint32_t x, uint32_t y, uint32_t color);

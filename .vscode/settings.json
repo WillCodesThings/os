@@ -11,5 +11,6 @@
     "print.h": "c",
     "test.h": "c",
     "drawtest.h": "c"
-  }
+  },
+  "C_Cpp.errorSquiggles": "disabled"
 }

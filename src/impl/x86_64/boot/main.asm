@@ -2,197 +2,291 @@ global start
 extern long_mode_start
 
 section .data
-; Define a structure for VBE mode info at a fixed address
-vbe_mode_info: equ 0x00090000  ; Fixed address for VBE info
+; Variables to store framebuffer info
+global framebuffer_address
+global screen_width
+global screen_height
+global bits_per_pixel
+global pitch
 
-; Variables to store graphics mode information
-global framebuffer_address, screen_width, screen_height, bits_per_pixel, pitch
-framebuffer_address: dd 0      ; Linear framebuffer physical address
-screen_width:       dw 0       ; Screen width in pixels
-screen_height:      dw 0       ; Screen height in pixels  
-bits_per_pixel:     db 0       ; Bits per pixel
-pitch:              dw 0       ; Bytes per scanline
+framebuffer_address: dq 0
+screen_width: dd 0
+screen_height: dd 0
+bits_per_pixel: dd 0
+pitch: dd 0
 
 section .text
 bits 32
-global start:
 start:
-	mov esp, stack_top
+    mov esp, stack_top
+    
+    ; EBX contains the physical address of the Multiboot2 info structure
+    push ebx  ; Save it
 
-	call check_multiboot
-	call check_cpuid
-	call check_long_mode
+    call check_multiboot
+    call check_cpuid
+    call check_long_mode
 
-	; --- Setup VESA graphics mode before paging ---
-    ; call setup_vesa_graphics
+    ; Parse Multiboot2 info for framebuffer
+    pop ebx
+    push ebx
+    call parse_multiboot2_framebuffer
 
-	call setup_page_tables
-	call enable_paging
+    call setup_page_tables
+    call enable_paging
 
-	lgdt [gdt64.pointer]
-	jmp gdt64.code_segment:long_mode_start
+    lgdt [gdt64.pointer]
+    
+    ; Pass multiboot info to kernel
+    pop edi
+    jmp gdt64.code_segment:long_mode_start
 
-	hlt
+    hlt
 
-; --- VESA graphics setup routine ---
-; setup_vesa_graphics:
-;     ; Set VESA mode 0x118 (1024x768x32bpp) with linear framebuffer
-;     mov ax, 0x4F02
-;     mov bx, 0x118 | 0x4000    ; Mode 0x118 + linear framebuffer flag
-;     int 0x10
-;     cmp ax, 0x004F
-;     jne vesa_error
+; Parse Multiboot2 structure to find framebuffer info
+parse_multiboot2_framebuffer:
+    push ebp
+    mov ebp, esp
+    push ebx
+    push esi
+    push edi
+    
+    mov esi, [ebp + 8]  ; Get multiboot info address from stack
+    
+    ; First 8 bytes are total_size and reserved
+    mov ecx, [esi]      ; Total size
+    add esi, 8          ; Skip to first tag
+    
+.tag_loop:
+    ; Check if we've reached the end
+    mov eax, [esi]      ; Tag type
+    cmp eax, 0          ; Type 0 = end tag
+    je .not_found
+    
+    cmp eax, 8          ; Type 8 = framebuffer info
+    je .found_framebuffer
+    
+    ; Move to next tag
+    mov edx, [esi + 4]  ; Tag size
+    add esi, edx        ; Skip this tag
+    
+    ; Align to 8-byte boundary
+    add esi, 7
+    and esi, ~7
+    
+    jmp .tag_loop
 
-;     ; Get VESA mode info
-;     ; Set ES:DI to point to our VBE info structure buffer
-;     mov di, vbe_mode_info     ; Destination address for mode info
-;     mov ax, 0x4F01            ; VBE get mode info
-;     mov cx, 0x118             ; Mode we want info about
-;     int 0x10
-;     cmp ax, 0x004F
-;     jne vesa_error
+.found_framebuffer:
+    ; Framebuffer tag structure:
+    ; +0:  u32 type (8)
+    ; +4:  u32 size
+    ; +8:  u64 framebuffer_addr
+    ; +16: u32 framebuffer_pitch
+    ; +20: u32 framebuffer_width
+    ; +24: u32 framebuffer_height
+    ; +28: u8  framebuffer_bpp
+    ; +29: u8  framebuffer_type (1 = RGB)
+    
+    ; Read framebuffer address (64-bit, but we only need lower 32 bits)
+    mov eax, [esi + 8]
+    mov [framebuffer_address], eax
+    mov eax, [esi + 12]
+    mov [framebuffer_address + 4], eax
+    
+    ; Read other info
+    mov eax, [esi + 16]
+    mov [pitch], eax
+    
+    mov eax, [esi + 20]
+    mov [screen_width], eax
+    
+    mov eax, [esi + 24]
+    mov [screen_height], eax
+    
+    movzx eax, byte [esi + 28]
+    mov [bits_per_pixel], eax
+    
+    pop edi
+    pop esi
+    pop ebx
+    pop ebp
+    ret
 
-;     ; Store relevant info in our variables
-;     ; Note: We access the mode info structure directly
-;     ; framebuffer at offset 0x28
-;     mov eax, [vbe_mode_info + 0x28]
-;     mov [framebuffer_address], eax
-
-;     ; screen width at offset 0x12
-;     mov ax, [vbe_mode_info + 0x12]
-;     mov [screen_width], ax
-
-;     ; screen height at offset 0x14
-;     mov ax, [vbe_mode_info + 0x14]
-;     mov [screen_height], ax
-
-;     ; bits per pixel at offset 0x19
-;     mov al, [vbe_mode_info + 0x19]
-;     mov [bits_per_pixel], al
-
-;     ; pitch (bytes per scanline) at offset 0x10
-;     mov ax, [vbe_mode_info + 0x10]
-;     mov [pitch], ax
-
-;     ret
-
-; vesa_error:
-;     mov al, "V"
-;     jmp error
+.not_found:
+    ; Framebuffer not found - error
+    mov al, 'F'
+    mov [0xb8000], al
+    cli
+    hlt
 
 check_multiboot:
-	cmp eax, 0x36d76289
-	jne .no_multiboot
-	ret
+    cmp eax, 0x36d76289
+    jne .no_multiboot
+    ret
 .no_multiboot:
-	mov al, "M"
-	jmp error
+    mov al, 'M'
+    jmp error
 
 check_cpuid:
-	pushfd
-	pop eax
-	mov ecx, eax
-	xor eax, 1 << 21
-	push eax
-	popfd
-	pushfd
-	pop eax
-	push ecx
-	popfd
-	cmp eax, ecx
-	je .no_cpuid
-	ret
+    pushfd
+    pop eax
+    mov ecx, eax
+    xor eax, 1 << 21
+    push eax
+    popfd
+    pushfd
+    pop eax
+    push ecx
+    popfd
+    cmp eax, ecx
+    je .no_cpuid
+    ret
 .no_cpuid:
-	mov al, "C"
-	jmp error
+    mov al, 'C'
+    jmp error
 
 check_long_mode:
-	mov eax, 0x80000000
-	cpuid
-	cmp eax, 0x80000001
-	jb .no_long_mode
-
-	mov eax, 0x80000001
-	cpuid
-	test edx, 1 << 29
-	jz .no_long_mode
-	
-	ret
+    mov eax, 0x80000000
+    cpuid
+    cmp eax, 0x80000001
+    jb .no_long_mode
+    
+    mov eax, 0x80000001
+    cpuid
+    test edx, 1 << 29
+    jz .no_long_mode
+    ret
 .no_long_mode:
-	mov al, "L"
-	jmp error
+    mov al, 'L'
+    jmp error
 
 setup_page_tables:
-	mov eax, page_table_l3
-	or eax, 0b11 ; present, writable
-	mov [page_table_l4], eax
-	
-	mov eax, page_table_l2
-	or eax, 0b11 ; present, writable
-	mov [page_table_l3], eax
-
-	mov ecx, 0 ; counter
-.loop:
-
-	mov eax, 0x200000 ; 2MiB
-	mul ecx
-	or eax, 0b10000011 ; present, writable, huge page
-	mov [page_table_l2 + ecx * 8], eax
-
-	inc ecx ; increment counter
-	cmp ecx, 512 ; checks if the whole table is mapped
-	jne .loop ; if not, continue
-
-	ret
+    ; Map P4 table
+    mov eax, p3_table
+    or eax, 0b11  ; present + writable
+    mov [p4_table], eax
+    
+    ; Map multiple P3 entries to cover first 4GB
+    mov eax, p2_table
+    or eax, 0b11
+    mov [p3_table], eax          ; 0-1GB
+    
+    mov eax, p2_table_2
+    or eax, 0b11
+    mov [p3_table + 8], eax      ; 1-2GB
+    
+    mov eax, p2_table_3
+    or eax, 0b11
+    mov [p3_table + 16], eax     ; 2-3GB
+    
+    mov eax, p2_table_4
+    or eax, 0b11
+    mov [p3_table + 24], eax     ; 3-4GB
+    
+    ; Identity map first 1GB (0x00000000 - 0x3FFFFFFF)
+    xor ecx, ecx
+.map_p2_1:
+    mov eax, ecx
+    shl eax, 21              ; ecx * 2MB (shift left 21 bits)
+    or eax, 0b10000011       ; present + writable + huge page
+    mov [p2_table + ecx * 8], eax
+    mov dword [p2_table + ecx * 8 + 4], 0  ; upper 32 bits
+    inc ecx
+    cmp ecx, 512
+    jne .map_p2_1
+    
+    ; Identity map second 1GB (0x40000000 - 0x7FFFFFFF)
+    xor ecx, ecx
+.map_p2_2:
+    mov eax, ecx
+    shl eax, 21
+    add eax, 0x40000000
+    or eax, 0b10000011
+    mov [p2_table_2 + ecx * 8], eax
+    mov dword [p2_table_2 + ecx * 8 + 4], 0
+    inc ecx
+    cmp ecx, 512
+    jne .map_p2_2
+    
+    ; Identity map third 1GB (0x80000000 - 0xBFFFFFFF)
+    xor ecx, ecx
+.map_p2_3:
+    mov eax, ecx
+    shl eax, 21
+    add eax, 0x80000000
+    or eax, 0b10000011
+    mov [p2_table_3 + ecx * 8], eax
+    mov dword [p2_table_3 + ecx * 8 + 4], 0
+    inc ecx
+    cmp ecx, 512
+    jne .map_p2_3
+    
+    ; Identity map fourth 1GB (0xC0000000 - 0xFFFFFFFF)
+    xor ecx, ecx
+.map_p2_4:
+    mov eax, ecx
+    shl eax, 21
+    add eax, 0xC0000000
+    or eax, 0b10000011
+    mov [p2_table_4 + ecx * 8], eax
+    mov dword [p2_table_4 + ecx * 8 + 4], 0
+    inc ecx
+    cmp ecx, 512
+    jne .map_p2_4
+    
+    ret
 
 enable_paging:
-	; pass page table location to cpu
-	mov eax, page_table_l4
-	mov cr3, eax
-
-	; enable PAE
-	mov eax, cr4
-	or eax, 1 << 5
-	mov cr4, eax
-
-	; enable long mode
-	mov ecx, 0xC0000080
-	rdmsr
-	or eax, 1 << 8
-	wrmsr
-
-	; enable paging
-	mov eax, cr0
-	or eax, 1 << 31
-	mov cr0, eax
-
-	ret
+    ; Load P4 to cr3
+    mov eax, p4_table
+    mov cr3, eax
+    
+    ; Enable PAE
+    mov eax, cr4
+    or eax, 1 << 5
+    mov cr4, eax
+    
+    ; Enable long mode
+    mov ecx, 0xC0000080
+    rdmsr
+    or eax, 1 << 8
+    wrmsr
+    
+    ; Enable paging
+    mov eax, cr0
+    or eax, 1 << 31
+    mov cr0, eax
+    
+    ret
 
 error:
-	; print "ERR: X" where X is the error code
-	mov dword [0xb8000], 0x4f524f45
-	mov dword [0xb8004], 0x4f3a4f52
-	mov dword [0xb8008], 0x4f204f20
-	mov byte  [0xb800a], al
-	hlt
+    mov dword [0xb8000], 0x4f524f45
+    mov [0xb8004], al
+    hlt
 
 section .bss
 align 4096
-page_table_l4:
-	resb 4096
-page_table_l3:
-	resb 4096
-page_table_l2:
-	resb 4096
+p4_table:
+    resb 4096
+p3_table:
+    resb 4096
+p2_table:
+    resb 4096
+p2_table_2:
+    resb 4096
+p2_table_3:
+    resb 4096
+p2_table_4:
+    resb 4096
 stack_bottom:
-	resb 4096 * 4
+    resb 4096 * 4
 stack_top:
 
 section .rodata
 gdt64:
-	dq 0 ; zero entry
+    dq 0
 .code_segment: equ $ - gdt64
-	dq (1 << 43) | (1 << 44) | (1 << 47) | (1 << 53) ; code segment
+    dq (1<<43) | (1<<44) | (1<<47) | (1<<53)
 .pointer:
-	dw $ - gdt64 - 1 ; length
-	dq gdt64 ; address
+    dw $ - gdt64 - 1
+    dq gdt64

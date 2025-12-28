@@ -19,6 +19,7 @@ keyboard_interrupt_handler:
     push r13
     push r14
     push r15
+    sub rsp, 8        ; align stack to 16 bytes
 
     ; Save segment registers (optional but good practice)
     ; Not strictly necessary in long mode, but may help prevent bugs
@@ -32,7 +33,7 @@ keyboard_interrupt_handler:
 
     ; Send End of Interrupt (EOI) to the PIC
     mov al, 0x20
-    out 0x20, al
+    out 0x20, al ; master only PIC
 
     ; Restore segment registers (if saved)
     ; pop gs
@@ -41,6 +42,7 @@ keyboard_interrupt_handler:
     ; pop ds
 
     ; Restore general-purpose registers
+    add rsp, 8        ; restore stack
     pop r15
     pop r14
     pop r13

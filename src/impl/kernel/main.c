@@ -1,72 +1,39 @@
-#include <stdint.h>
-#include <interrupts/io/keyboard.h>
-#include <interrupts/idt.h>
-#include <interrupts/pic.h>
+#include <graphics/graphics.h>
 #include <interrupts/safeInterrupt.h>
-#include <shell/shell.h>
+#include <interrupts/io/keyboard.h>
+#include <interrupts/io/mouse.h>
+#include <graphics/cursor.h>
 #include <shell/print.h>
-// #include <draw/drawtest.h>
+#include <shell/shell.h>
 
-// Simple delay function
-void delay(uint64_t ticks)
+void kernel_main(void)
 {
-    for (uint64_t i = 0; i < ticks; i++)
-    {
-        // Simple delay loop
-        asm volatile("nop");
-    }
-}
+    // Initialize graphics
+    graphics_init();
+    print_init();
 
-void kernel_main()
-{
-    // Initialize mode info variables from assembly data
-    // get_mode_info();
-
-    // // Cast framebuffer physical address to pointer
-    // // Note: This assumes identity mapping or that the framebuffer is already mapped
-    // uint32_t *fb = (uint32_t *)(uintptr_t)framebuffer_address;
-
-    // // Draw a test pattern to confirm graphics are working
-
-    // // Red rectangle at (100,100), size 200x100 pixels
-    // fillrect(fb, pitch, 100, 100, 200, 100, 0xFF, 0x00, 0x00);
-
-    // // Green rectangle at (400,100), size 200x100 pixels
-    // fillrect(fb, pitch, 400, 100, 200, 100, 0x00, 0xFF, 0x00);
-
-    // // Blue rectangle at (250,300), size 200x100 pixels
-    // fillrect(fb, pitch, 250, 300, 200, 100, 0x00, 0x00, 0xFF);
-
-    // You could add additional initialization here
-    // For example:
-    // init_interrupts_safe();
-    // keyboard_init();
-    // enable_interrupts();
-    // shell_run();
-
-    // Hang or continue with other kernel tasks
-    // while (1)
-    // {
-    //     asm("hlt");
-    // }
-
-    // Print welcome message
-    print_str("OS Kernel: Loading...\n");
     init_interrupts_safe();
+    // test_interrupts();
+
     keyboard_init();
+    mouse_init();
+
+    cursor_init();
+    cursor_show();
 
     enable_interrupts();
 
-    print_str("\nKeyboard Ready! Type something:\n");
+    // debug_print_interrupt(0x2C); // IRQ12
 
-    fillrect((unsigned char *)0xA0000, 0, 0, 0, 320, 200);
-    // Run the shell
+    // Draw a welcome screen
+    uint32_t cx = get_screen_width() / 2;
+    uint32_t cy = get_screen_height() / 2;
+
+    draw_triangle(cx, cy - 100, cx - 100, cy + 100, cx + 100, cy + 100, COLOR_CYAN, 1);
+    // draw_triangle_3colors(cx, cy - 80, cx - 80, cy + 80, cx + 80, cy + 80, COLOR_MAGENTA, COLOR_YELLOW, COLOR_GREEN);
+    fill_rect(10, 10, 200, 50, COLOR_BLUE);
+
+    // mouse_test_polling();
+
     shell_run();
-
-    // This code should never be reached
-    while (1)
-    {
-        // Idle loop
-        asm volatile("hlt");
-    }
 }

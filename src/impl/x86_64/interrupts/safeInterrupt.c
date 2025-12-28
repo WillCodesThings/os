@@ -49,41 +49,38 @@ void init_interrupts_safe()
     // This prevents any hardware interrupts from firing
     outb(PIC1_DATA, 0xFF); // Disable all IRQs on master PIC
     outb(PIC2_DATA, 0xFF); // Disable all IRQs on slave PIC
-
-    // Note: We do NOT enable interrupts here
-    // This will be done in a controlled manner in test_interrupts()
 }
 
 // Function to test interrupts with careful control
 void test_interrupts()
 {
     // Print initial status
-    print_str("Starting interrupt testing sequence...\n");
+    serial_print("Starting interrupt testing sequence...\n");
 
     // 1. First, enable CPU interrupts with all hardware interrupts masked
-    print_str("Enabling CPU interrupts with all hardware masked...\n");
+    serial_print("Enabling CPU interrupts with all hardware masked...\n");
     asm volatile("sti");
 
     // Wait a bit to ensure system is stable
-    print_str("Waiting to ensure stability...\n");
+    serial_print("Waiting to ensure stability...\n");
     for (volatile int i = 0; i < 1000000; i++)
         ;
 
     // 2. Now enable keyboard interrupt only
-    print_str("Enabling keyboard interrupt only...\n");
+    serial_print("Enabling keyboard interrupt only...\n");
     outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << 1)); // Unmask IRQ1 (keyboard)
 
     // Wait again to ensure stability
-    print_str("Waiting to verify keyboard interrupt works...\n");
+    serial_print("Waiting to verify keyboard interrupt works...\n");
     for (volatile int i = 0; i < 1000000; i++)
         ;
 
     // 3. Enable timer interrupt for system clock
     // Uncomment when keyboard is working reliably
-    // print_str("Enabling timer interrupt...\n");
-    // outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << 0)); // Unmask IRQ0 (timer)
+    serial_print("Enabling timer interrupt...\n");
+    outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << 0)); // Unmask IRQ0 (timer)
 
-    print_str("Interrupt testing complete - interrupts enabled!\n");
+    serial_print("Interrupt testing complete - interrupts enabled!\n");
 }
 
 // Debug function to print interrupt information
@@ -111,8 +108,8 @@ void debug_print_interrupt(int interrupt_num)
         buffer[7] = '\0';
     }
 
-    print_str(buffer);
-    print_str("\n");
+    serial_print(buffer);
+    serial_print("\n");
 }
 
 // C handler for default interrupts

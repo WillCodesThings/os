@@ -5,21 +5,29 @@
 
 void pic_remap(int offset1, int offset2)
 {
+    // Save current masks
     uint8_t a1 = inb(PIC1_DATA);
     uint8_t a2 = inb(PIC2_DATA);
 
+    // Start initialization
     outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
     io_wait();
     outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
     io_wait();
-    outb(PIC1_DATA, offset1); // remap IRQs 0-7 to offset1 (e.g. 0x20)
+
+    // Set vector offsets
+    outb(PIC1_DATA, offset1); // Master PIC IRQ0-7
     io_wait();
-    outb(PIC2_DATA, offset2); // remap IRQs 8-15 to offset2 (e.g. 0x28)
+    outb(PIC2_DATA, offset2); // Slave PIC IRQ8-15
     io_wait();
-    outb(PIC1_DATA, 4);
+
+    // Setup cascade
+    outb(PIC1_DATA, 4); // Tell Master PIC there’s a slave at IRQ2
     io_wait();
-    outb(PIC2_DATA, 2);
+    outb(PIC2_DATA, 2); // Tell Slave PIC its cascade identity
     io_wait();
+
+    // Set 8086/88 mode
     outb(PIC1_DATA, ICW4_8086);
     io_wait();
     outb(PIC2_DATA, ICW4_8086);

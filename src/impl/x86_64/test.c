@@ -42,7 +42,7 @@ void triangle(int n)
         {
             if (j == 0 || j == i)
             {
-                triangle[i][j] = 1; // Edges of the triangle are always 1
+                triangle[i][j] = 1;
             }
             else
             {
@@ -57,7 +57,7 @@ void triangle(int n)
         // Add padding for alignment
         for (int space = 0; space < n - i - 1; space++)
         {
-            printf("   "); // Three spaces per number for alignment
+            printf("   "); 
         }
 
         // Print the numbers in the row

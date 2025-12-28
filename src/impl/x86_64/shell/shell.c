@@ -2,18 +2,26 @@
 #include <shell/shell.h>
 #include <shell/print.h>
 #include <interrupts/io/keyboard.h>
+#include <graphics/graphics.h>
+#include <interrupts/io/mouse.h>
+#include <graphics/cursor.h>
 
 // Constants
 #define MAX_COMMAND_LENGTH 64
 #define MAX_COMMANDS 8
+#define MAX_ARGS 10
 #define PROMPT "> "
 
 // Command buffer
 static char command_buffer[MAX_COMMAND_LENGTH];
 static uint8_t buffer_pos = 0;
 
-// Command function type
-typedef void (*command_function)(void);
+// Argument parsing
+static char *args[MAX_ARGS];
+static int arg_count = 0;
+
+// Command function type - now takes argc and argv
+typedef void (*command_function)(int argc, char **argv);
 
 // Command structure
 typedef struct
@@ -24,10 +32,12 @@ typedef struct
 } command_t;
 
 // Forward declarations for command functions
-static void cmd_help(void);
-static void cmd_clear(void);
-static void cmd_info(void);
-static void cmd_reboot(void);
+static void cmd_help(int argc, char **argv);
+static void cmd_clear(int argc, char **argv);
+static void cmd_info(int argc, char **argv);
+static void cmd_reboot(int argc, char **argv);
+static void cmd_draw(int argc, char **argv);
+static void cmd_cls(int argc, char **argv);
 
 // Command table
 static const command_t commands[MAX_COMMANDS] = {
@@ -35,8 +45,8 @@ static const command_t commands[MAX_COMMANDS] = {
     {"clear", "Clear the screen", cmd_clear},
     {"info", "Show system information", cmd_info},
     {"reboot", "Reboot the system", cmd_reboot},
-    {NULL, NULL, NULL}, // End of commands
-    {NULL, NULL, NULL},
+    {"draw", "Draw shapes (draw triangle|rect|line|pixel)", cmd_draw},
+    {"cls", "Clear the graphics screen", cmd_cls},
     {NULL, NULL, NULL},
     {NULL, NULL, NULL}};
 
@@ -62,6 +72,37 @@ static uint8_t strlen(const char *s)
     return len;
 }
 
+// Parse command line into arguments
+static void parse_arguments(void)
+{
+    arg_count = 0;
+    char *ptr = command_buffer;
+
+    // Skip leading spaces
+    while (*ptr == ' ')
+        ptr++;
+
+    while (*ptr && arg_count < MAX_ARGS)
+    {
+        // Start of argument
+        args[arg_count++] = ptr;
+
+        // Find end of argument (space or null)
+        while (*ptr && *ptr != ' ')
+            ptr++;
+
+        // Null-terminate this argument
+        if (*ptr)
+        {
+            *ptr = '\0';
+            ptr++;
+            // Skip spaces between arguments
+            while (*ptr == ' ')
+                ptr++;
+        }
+    }
+}
+
 // Execute command
 static void execute_command(void)
 {
@@ -74,19 +115,27 @@ static void execute_command(void)
     // Null-terminate the command
     command_buffer[buffer_pos] = '\0';
 
-    // Check for built-in commands
+    // Parse into arguments
+    parse_arguments();
+
+    if (arg_count == 0)
+    {
+        return;
+    }
+
+    // First argument is the command name
     for (int i = 0; i < MAX_COMMANDS && commands[i].name != NULL; i++)
     {
-        if (strcmp(command_buffer, commands[i].name) == 0)
+        if (strcmp(args[0], commands[i].name) == 0)
         {
-            commands[i].function();
+            commands[i].function(arg_count, args);
             return;
         }
     }
 
     // Command not found
     print_str("Unknown command: ");
-    print_str(command_buffer);
+    print_str(args[0]);
     print_str("\nType 'help' for available commands\n");
 }
 
@@ -100,8 +149,175 @@ static void reset_command_buffer(void)
     }
 }
 
-// Command implementations
-static void cmd_help(void)
+int atoi(const char *str)
+{
+    int result = 0;
+    int sign = 1;
+
+    if (*str == '-')
+    {
+        sign = -1;
+        str++;
+    }
+
+    while (*str >= '0' && *str <= '9')
+    {
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    return result * sign;
+}
+
+// Helper to parse color
+static uint32_t parse_color(const char *str)
+{
+    if (strcmp(str, "red") == 0)
+        return COLOR_RED;
+    if (strcmp(str, "green") == 0)
+        return COLOR_GREEN;
+    if (strcmp(str, "blue") == 0)
+        return COLOR_BLUE;
+    if (strcmp(str, "white") == 0)
+        return COLOR_WHITE;
+    if (strcmp(str, "yellow") == 0)
+        return COLOR_YELLOW;
+    if (strcmp(str, "cyan") == 0)
+        return COLOR_CYAN;
+    if (strcmp(str, "magenta") == 0)
+        return COLOR_MAGENTA;
+    if (strcmp(str, "black") == 0)
+        return COLOR_BLACK;
+    return COLOR_WHITE; // default
+}
+
+static void cmd_cls(int argc, char **argv)
+{
+    clear_screen(COLOR_BLACK);
+    print_str("Graphics screen cleared\n");
+}
+
+static void cmd_draw(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        print_str("Usage: draw <shape> [args]\n");
+        print_str("Shapes:\n");
+        print_str("  triangle <x0> <y0> <x1> <y1> <x2> <y2> <color> <filled>\n");
+        print_str("  rect <x> <y> <w> <h> <color>\n");
+        print_str("  line <x0> <y0> <x1> <y1> <color>\n");
+        print_str("  pixel <x> <y> <color>\n");
+        print_str("  circle <cx> <cy> <radius> <color> [filled]\n");
+        print_str("Colors: red, green, blue, white, yellow, cyan, magenta\n");
+        return;
+    }
+
+    if (strcmp(argv[1], "triangle") == 0)
+    {
+        if (argc < 10)
+        {
+            print_str("Usage: draw triangle <x0> <y0> <x1> <y1> <x2> <y2> <color> <filled>\n");
+            return;
+        }
+
+        int x0 = atoi(argv[2]);
+        int y0 = atoi(argv[3]);
+        int x1 = atoi(argv[4]);
+        int y1 = atoi(argv[5]);
+        int x2 = atoi(argv[6]);
+        int y2 = atoi(argv[7]);
+        uint32_t color = parse_color(argv[8]);
+        int isFilled = 0;
+
+        if (argc >= 10 && strcmp(argv[9], "filled") == 0)
+        {
+            isFilled = 1;
+        }
+
+        draw_triangle(x0, y0, x1, y1, x2, y2, color, isFilled);
+        print_str("Triangle drawn!\n");
+    }
+    else if (strcmp(argv[1], "rect") == 0)
+    {
+        if (argc < 7)
+        {
+            print_str("Usage: draw rect <x> <y> <w> <h> <color>\n");
+            return;
+        }
+
+        int x = atoi(argv[2]);
+        int y = atoi(argv[3]);
+        int w = atoi(argv[4]);
+        int h = atoi(argv[5]);
+        uint32_t color = parse_color(argv[6]);
+
+        fill_rect(x, y, w, h, color);
+        print_str("Rectangle drawn!\n");
+    }
+    else if (strcmp(argv[1], "line") == 0)
+    {
+        if (argc < 7)
+        {
+            print_str("Usage: draw line <x0> <y0> <x1> <y1> <color>\n");
+            return;
+        }
+
+        int x0 = atoi(argv[2]);
+        int y0 = atoi(argv[3]);
+        int x1 = atoi(argv[4]);
+        int y1 = atoi(argv[5]);
+        uint32_t color = parse_color(argv[6]);
+
+        draw_line(x0, y0, x1, y1, color);
+        print_str("Line drawn!\n");
+    }
+    else if (strcmp(argv[1], "pixel") == 0)
+    {
+        if (argc < 5)
+        {
+            print_str("Usage: draw pixel <x> <y> <color>\n");
+            return;
+        }
+
+        int x = atoi(argv[2]);
+        int y = atoi(argv[3]);
+        uint32_t color = parse_color(argv[4]);
+
+        put_pixel(x, y, color);
+        print_str("Pixel drawn!\n");
+    }
+    else if (strcmp(argv[1], "circle") == 0)
+    {
+        if (argc < 6)
+        {
+            print_str("Usage: draw circle <cx> <cy> <radius> <color> [filled]\n");
+            return;
+        }
+
+        int cx = atoi(argv[2]);
+        int cy = atoi(argv[3]);
+        int radius = atoi(argv[4]);
+        uint32_t color = parse_color(argv[5]);
+        int isFilled = 0;
+
+        if (argc >= 7 && strcmp(argv[6], "filled") == 0)
+        {
+            isFilled = 1;
+        }
+
+        draw_circle(cx, cy, radius, color, isFilled);
+        print_str("Circle drawn!\n");
+    }
+    else
+    {
+        print_str("Unknown shape: ");
+        print_str(argv[1]);
+        print_str("\n");
+    }
+}
+
+// Command implementations - all now take argc/argv
+static void cmd_help(int argc, char **argv)
 {
     print_str("Available commands:\n");
     for (int i = 0; i < MAX_COMMANDS && commands[i].name != NULL; i++)
@@ -114,28 +330,21 @@ static void cmd_help(void)
     }
 }
 
-static void cmd_clear(void)
+static void cmd_clear(int argc, char **argv)
 {
-    // Clear screen - simple implementation
-    for (int i = 0; i < 25; i++)
-    {
-        print_str("\n");
-    }
+    print_clear();
 }
 
-static void cmd_info(void)
+static void cmd_info(int argc, char **argv)
 {
     print_str("Simple OS Shell\n");
     print_str("Version 0.1\n");
     print_str("System is running!\n");
 }
 
-static void cmd_reboot(void)
+static void cmd_reboot(int argc, char **argv)
 {
     print_str("Rebooting system...\n");
-    // Note: This is a simplified implementation
-    // In a real system, you would use proper reboot mechanisms
-    // This would typically involve writing to I/O ports
     uint8_t good = 0x02;
     while (good & 0x02)
     {
@@ -148,6 +357,7 @@ static void cmd_reboot(void)
 void shell_init(void)
 {
     reset_command_buffer();
+    clear_screen(COLOR_BLACK);
     print_str("Shell initialized\n");
 }
 
@@ -158,6 +368,8 @@ void shell_process_char(char c)
     {
         // Execute the command on Enter
         print_str("\n");
+        serial_print(command_buffer);
+        serial_print("\n");
         execute_command();
         reset_command_buffer();
         print_str(PROMPT);
@@ -179,6 +391,67 @@ void shell_process_char(char c)
     }
 }
 
+#define COM1 0x3F8
+
+void serial_init(void)
+{
+    outb(COM1 + 1, 0x00);
+    outb(COM1 + 3, 0x80);
+    outb(COM1 + 0, 0x03);
+    outb(COM1 + 1, 0x00);
+    outb(COM1 + 3, 0x03);
+    outb(COM1 + 2, 0xC7);
+    outb(COM1 + 4, 0x0B);
+}
+
+void serial_putchar(char c)
+{
+    while ((inb(COM1 + 5) & 0x20) == 0)
+        ;
+    outb(COM1, c);
+}
+
+void serial_print(const char *str)
+{
+    while (*str)
+    {
+        serial_putchar(*str++);
+    }
+}
+
+void serial_print_hex(uint64_t value)
+{
+    char hex[] = "0123456789ABCDEF";
+    serial_print("0x");
+    for (int i = 60; i >= 0; i -= 4)
+    {
+        serial_putchar(hex[(value >> i) & 0xF]);
+    }
+}
+
+void serial_print_dec(uint32_t value)
+{
+    char buffer[32];
+    int i = 0;
+
+    if (value == 0)
+    {
+        serial_putchar('0');
+        return;
+    }
+
+    while (value > 0)
+    {
+        buffer[i++] = '0' + (value % 10);
+        value /= 10;
+    }
+
+    while (i > 0)
+    {
+        serial_putchar(buffer[--i]);
+    }
+}
+
 // Main shell loop
 void shell_run(void)
 {
@@ -190,14 +463,68 @@ void shell_run(void)
         if (keyboard_available())
         {
             char c = keyboard_read();
-            if (c == "\b")
-            {
-            }
             shell_process_char(c);
             if (c >= 32 && c != 127) // printable ASCII only
             {
                 print_char(c);
             }
         }
+
+        static int32_t last_x = -1;
+        static int32_t last_y = -1;
+        static uint8_t last_buttons = 0;
+
+        // Handle mouse
+        mouse_state_t mouse = mouse_get_state();
+
+        // Update if position OR buttons changed
+        if (mouse.x != last_x || mouse.y != last_y || mouse.buttons != last_buttons)
+        {
+            cursor_update(mouse.x, mouse.y);
+            last_x = mouse.x;
+            last_y = mouse.y;
+            last_buttons = mouse.buttons;
+
+            // Optional: Handle click events
+            if (mouse.buttons & MOUSE_LEFT_BUTTON)
+            {
+                set_cursor_color(0xFF0000); // Change cursor color on click
+
+                draw_circle(mouse.x, mouse.y, 3, 0xFFFF00, 1);
+                // You can add click handling here
+                // For example, draw a dot where clicked:
+                // put_pixel(mouse.x, mouse.y, 0xFFFF00);
+            }
+            else if (mouse.buttons & MOUSE_RIGHT_BUTTON)
+            {
+                set_cursor_color(0x0000FF); // Change cursor color on right click
+                // clear the dot where right-clicked:
+                draw_circle(mouse.x, mouse.y, 3, COLOR_BLACK, 1);
+            }
+            else if (mouse.buttons & MOUSE_MIDDLE_BUTTON)
+            {
+                set_cursor_color(0x00FF00); // Change cursor color on middle click
+            }
+            else
+            {
+                set_cursor_color(0xFFFFFF); // Default cursor color
+            }
+        }
+
+        // // Debug: show interrupt count occasionally
+        // extern volatile uint32_t mouse_interrupt_count;
+        // static uint32_t last_count = 0;
+        // static int tick = 0;
+        // if (++tick > 100000)
+        // {
+        //     tick = 0;
+        //     if (mouse_interrupt_count != last_count)
+        //     {
+        //         serial_print("IRQ count: ");
+        //         serial_print_dec(mouse_interrupt_count);
+        //         serial_print("\n");
+        //         last_count = mouse_interrupt_count;
+        //     }
+        // }
     }
 }

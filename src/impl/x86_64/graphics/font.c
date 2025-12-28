@@ -94,7 +94,7 @@ void draw_char(char c, uint32_t x, uint32_t y, uint32_t fg_color, uint32_t bg_co
             {
                 put_pixel(x + dx, y + dy, fg_color);
             }
-            else if (bg_color != 0)
+            else
             {
                 put_pixel(x + dx, y + dy, bg_color);
             }

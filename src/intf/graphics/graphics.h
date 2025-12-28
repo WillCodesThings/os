@@ -11,7 +11,8 @@ void put_pixel(uint32_t x, uint32_t y, uint32_t color);
 void clear_screen(uint32_t color);
 void fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color);
 void draw_line(int x0, int y0, int x1, int y1, uint32_t color);
-void draw_triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color);
+void draw_triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color, int isFilled);
+void draw_circle(int cx, int cy, int radius, uint32_t color, int isFilled);
 
 // Get screen info
 uint32_t get_screen_width(void);

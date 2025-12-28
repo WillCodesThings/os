@@ -64,11 +64,82 @@ void draw_line(int x0, int y0, int x1, int y1, uint32_t color)
     }
 }
 
-void draw_triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color)
+void draw_triangle(int x0, int y0, int x1, int y1, int x2, int y2, uint32_t color, int isFilled)
 {
-    draw_line(x0, y0, x1, y1, color);
-    draw_line(x1, y1, x2, y2, color);
-    draw_line(x2, y2, x0, y0, color);
+    if (isFilled == 1)
+    {
+        // draw filled triangle using barycentric coordinates
+        int minX = x0 < x1 ? (x0 < x2 ? x0 : x2) : (x1 < x2 ? x1 : x2);
+        int maxX = x0 > x1 ? (x0 > x2 ? x0 : x2) : (x1 > x2 ? x1 : x2);
+        int minY = y0 < y1 ? (y0 < y2 ? y0 : y2) : (y1 < y2 ? y1 : y2);
+        int maxY = y0 > y1 ? (y0 > y2 ? y0 : y2) : (y1 > y2 ? y1 : y2);
+
+        for (int y = minY; y <= maxY; y++)
+        {
+            for (int x = minX; x <= maxX; x++)
+            {
+                int w0 = (x1 - x0) * (y - y0) - (y1 - y0) * (x - x0);
+                int w1 = (x2 - x1) * (y - y1) - (y2 - y1) * (x - x1);
+                int w2 = (x0 - x2) * (y - y2) - (y0 - y2) * (x - x2);
+
+                if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0))
+                {
+                    put_pixel(x, y, color);
+                }
+            }
+        }
+    }
+    else
+    {
+        draw_line(x0, y0, x1, y1, color);
+        draw_line(x1, y1, x2, y2, color);
+        draw_line(x2, y2, x0, y0, color);
+    }
+}
+
+void draw_circle(int cx, int cy, int radius, uint32_t color, int isFilled)
+{
+    if (isFilled == 1)
+    {
+        for (int y = -radius; y <= radius; y++)
+        {
+            for (int x = -radius; x <= radius; x++)
+            {
+                if (x * x + y * y <= radius * radius)
+                {
+                    put_pixel(cx + x, cy + y, color);
+                }
+            }
+        }
+        return;
+    }
+
+    // Midpoint circle algorithm for outline
+    int x = radius;
+    int y = 0;
+    int decisionOver2 = 1 - x; // Decision criterion divided by 2 evaluated at x=r, y=0
+
+    while (y <= x)
+    {
+        put_pixel(cx + x, cy + y, color);
+        put_pixel(cx + y, cy + x, color);
+        put_pixel(cx - x, cy + y, color);
+        put_pixel(cx - y, cy + x, color);
+        put_pixel(cx - x, cy - y, color);
+        put_pixel(cx - y, cy - x, color);
+        put_pixel(cx + x, cy - y, color);
+        put_pixel(cx + y, cy - x, color);
+        y++;
+        if (decisionOver2 <= 0)
+        {
+            decisionOver2 += 2 * y + 1; // Change in decision criterion for y -> y+1
+        }
+        else
+        {
+            x--;
+            decisionOver2 += 2 * y - 2 * x + 1; // Change for y -> y+1, x -> x-1
+        }
+    }
 }
 
 uint32_t get_screen_width(void)

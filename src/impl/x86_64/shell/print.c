@@ -1,67 +1,123 @@
 #include <shell/print.h>
+#include <graphics/font.h>
+#include <graphics/graphics.h>
 
-const static size_t NUM_COLS = 80;
-const static size_t NUM_ROWS = 25;
+static uint32_t cursor_x = 0;
+static uint32_t cursor_y = 0;
+static const uint32_t CHAR_WIDTH = 8;
+static const uint32_t CHAR_HEIGHT = 8;
+static uint32_t max_cols = 0;
+static uint32_t max_rows = 0;
 
-struct Char
-{
-    uint8_t character;
-    uint8_t color;
+// Color mapping from VGA colors to RGB
+static const uint32_t vga_to_rgb[16] = {
+    0x000000, // BLACK
+    0x0000AA, // BLUE
+    0x00AA00, // GREEN
+    0x00AAAA, // CYAN
+    0xAA0000, // RED
+    0xAA00AA, // MAGENTA
+    0xAA5500, // BROWN
+    0xAAAAAA, // LIGHT_GRAY
+    0x555555, // DARK_GRAY
+    0x5555FF, // LIGHT_BLUE
+    0x55FF55, // LIGHT_GREEN
+    0x55FFFF, // LIGHT_CYAN
+    0xFF5555, // LIGHT_RED
+    0xFF55FF, // PINK
+    0xFFFF55, // YELLOW
+    0xFFFFFF  // WHITE
 };
 
-struct Char *buffer = (struct Char *)0xb8000;
-size_t col = 0;
-size_t row = 0;
-uint8_t color = PRINT_COLOR_WHITE | PRINT_COLOR_BLACK << 4;
+static uint32_t fg_color = 0xFFFFFF; // White
+static uint32_t bg_color = 0x000000; // Black
+
+// Track which character cells have text (for clearing text only)
+static char text_buffer[80 * 25];
+
+void print_init(void)
+{
+    max_cols = get_screen_width() / CHAR_WIDTH;
+    max_rows = get_screen_height() / CHAR_HEIGHT;
+    cursor_x = 0;
+    cursor_y = 0;
+
+    // Clear text buffer
+    for (int i = 0; i < 80 * 25; i++)
+    {
+        text_buffer[i] = ' ';
+    }
+}
 
 void clear_row(size_t row)
 {
-    struct Char empty = (struct Char){
-        character : ' ',
-        color : color
-    };
-
-    for (size_t col = 0; col < NUM_COLS; col++)
+    // Only clear the text area, not graphics
+    for (size_t col = 0; col < max_cols; col++)
     {
-        buffer[row * NUM_COLS + col] = empty;
+        text_buffer[row * max_cols + col] = ' ';
+        fill_rect(col * CHAR_WIDTH, row * CHAR_HEIGHT, CHAR_WIDTH, CHAR_HEIGHT, bg_color);
     }
 }
 
 void print_clear()
 {
-    for (size_t row = 0; row < NUM_ROWS; row++)
+    // Clear all text but preserve graphics underneath
+    for (size_t row = 0; row < max_rows; row++)
     {
-        clear_row(row);
+        for (size_t col = 0; col < max_cols; col++)
+        {
+            text_buffer[row * max_cols + col] = ' ';
+            fill_rect(col * CHAR_WIDTH, row * CHAR_HEIGHT, CHAR_WIDTH, CHAR_HEIGHT, bg_color);
+        }
     }
+    cursor_x = 0;
+    cursor_y = 0;
+}
+
+static void scroll_screen(void)
+{
+    // Scroll text buffer up one line
+    for (size_t row = 1; row < max_rows; row++)
+    {
+        for (size_t col = 0; col < max_cols; col++)
+        {
+            char c = text_buffer[row * max_cols + col];
+            text_buffer[(row - 1) * max_cols + col] = c;
+
+            // Redraw the character
+            if (c != ' ')
+            {
+                draw_char(c, col * CHAR_WIDTH, (row - 1) * CHAR_HEIGHT, fg_color, bg_color);
+            }
+            else
+            {
+                fill_rect(col * CHAR_WIDTH, (row - 1) * CHAR_HEIGHT, CHAR_WIDTH, CHAR_HEIGHT, bg_color);
+            }
+        }
+    }
+
+    // Clear last row
+    clear_row(max_rows - 1);
+    cursor_y = max_rows - 1;
 }
 
 void print_newline()
 {
-    col = 0;
-    if (row < NUM_ROWS - 1)
-    {
-        row++;
-        return;
-    }
+    cursor_x = 0;
+    cursor_y++;
 
-    for (size_t row = 1; row < NUM_ROWS; row++)
+    if (cursor_y >= max_rows)
     {
-        for (size_t col = 0; col < NUM_COLS; col++)
-        {
-            struct Char character = buffer[row * NUM_COLS + col];
-            buffer[(row - 1) * NUM_COLS + col] = character;
-        }
+        scroll_screen();
     }
-
-    clear_row(NUM_ROWS - 1);
 }
 
 void print_set_cursor(size_t new_row, size_t new_col)
 {
-    if (new_row < NUM_ROWS && new_col < NUM_COLS)
+    if (new_row < max_rows && new_col < max_cols)
     {
-        row = new_row;
-        col = new_col;
+        cursor_y = new_row;
+        cursor_x = new_col;
     }
 }
 
@@ -75,48 +131,47 @@ void print_char(char c)
     else if (c == '\b')
     {
         // Handle backspace
-        if (col > 0)
+        if (cursor_x > 0)
         {
-            col--;
+            cursor_x--;
         }
-        else if (row > 0)
+        else if (cursor_y > 0)
         {
-            row--;
-            col = NUM_COLS - 1;
+            cursor_y--;
+            cursor_x = max_cols - 1;
         }
-        buffer[row * NUM_COLS + col] = (struct Char){
-            character : ' ',
-            color : color
-        };
+
+        // Clear the character position
+        text_buffer[cursor_y * max_cols + cursor_x] = ' ';
+        fill_rect(cursor_x * CHAR_WIDTH, cursor_y * CHAR_HEIGHT,
+                  CHAR_WIDTH, CHAR_HEIGHT, bg_color);
         return;
     }
 
-    if (col >= NUM_COLS)
+    if (cursor_x >= max_cols)
     {
         print_newline();
     }
 
-    buffer[row * NUM_COLS + col] = (struct Char){
-        character : c,
-        color : color
-    };
+    // Store in text buffer
+    text_buffer[cursor_y * max_cols + cursor_x] = c;
 
-    col++;
+    // Draw the character using graphical font
+    draw_char(c, cursor_x * CHAR_WIDTH, cursor_y * CHAR_HEIGHT, fg_color, bg_color);
+    cursor_x++;
 }
 
 void print_str(char *str)
 {
     for (size_t i = 0; str[i] != '\0'; i++)
     {
-        char character = (uint8_t)str[i];
-
-        print_char(character);
+        print_char(str[i]);
     }
 }
 
 void print_int(int num)
 {
-    char buffer[12]; // Enough for 32-bit int in decimal
+    char buffer[12];
     char *ptr = &buffer[11];
     *ptr = '\0';
 
@@ -142,7 +197,11 @@ void print_int(int num)
 
 void print_set_color(char foreground, char background)
 {
-    color = foreground + (background << 4);
+    // Convert VGA color indices to RGB
+    if (foreground < 16)
+        fg_color = vga_to_rgb[foreground];
+    if (background < 16)
+        bg_color = vga_to_rgb[background];
 }
 
 char *itoa(int value, int base)
@@ -188,7 +247,7 @@ void printf(const char *format, ...)
     {
         if (format[i] == '%')
         {
-            i++; // Move past '%'
+            i++;
 
             // Parse width specifier (optional)
             int width = 0;
@@ -202,7 +261,7 @@ void printf(const char *format, ...)
             switch (format[i])
             {
             case 'c':
-            { // Character
+            {
                 char c = (char)va_arg(args, int);
                 if (width > 1)
                 {
@@ -213,26 +272,26 @@ void printf(const char *format, ...)
                 break;
             }
             case 's':
-            { // String
+            {
                 const char *str = va_arg(args, const char *);
                 int len = 0;
                 while (str[len] != '\0')
-                    len++; // Calculate string length
+                    len++;
                 if (width > len)
                 {
                     for (int pad = 0; pad < width - len; pad++)
                         print_char(' ');
                 }
-                print_str(str);
+                print_str((char *)str);
                 break;
             }
             case 'd':
-            { // Decimal number
+            {
                 int num = va_arg(args, int);
-                char *num_str = itoa(num, 10); // Convert number to string
+                char *num_str = itoa(num, 10);
                 int len = 0;
                 while (num_str[len] != '\0')
-                    len++; // Calculate string length
+                    len++;
                 if (width > len)
                 {
                     for (int pad = 0; pad < width - len; pad++)
@@ -243,12 +302,12 @@ void printf(const char *format, ...)
             }
             case 'x':
             case 'X':
-            { // Hexadecimal number
+            {
                 int num = va_arg(args, int);
-                char *hex_str = itoa(num, 16); // Convert number to hex string
+                char *hex_str = itoa(num, 16);
                 int len = 0;
                 while (hex_str[len] != '\0')
-                    len++; // Calculate string length
+                    len++;
                 if (width > len)
                 {
                     for (int pad = 0; pad < width - len; pad++)
@@ -258,13 +317,13 @@ void printf(const char *format, ...)
                 break;
             }
             case 'p':
-            { // Pointer
+            {
                 uintptr_t ptr = va_arg(args, uintptr_t);
                 print_str("0x");
-                char *ptr_str = itoa(ptr, 16); // Convert pointer to string
+                char *ptr_str = itoa(ptr, 16);
                 int len = 0;
                 while (ptr_str[len] != '\0')
-                    len++; // Calculate string length
+                    len++;
                 if (width > len)
                 {
                     for (int pad = 0; pad < width - len; pad++)
@@ -273,10 +332,10 @@ void printf(const char *format, ...)
                 print_str(ptr_str);
                 break;
             }
-            case '%': // Literal '%'
+            case '%':
                 print_char('%');
                 break;
-            default: // Unsupported format specifier
+            default:
                 print_char('%');
                 print_char(format[i]);
                 break;
@@ -284,7 +343,7 @@ void printf(const char *format, ...)
         }
         else
         {
-            print_char(format[i]); // Print non-format characters
+            print_char(format[i]);
         }
     }
 

@@ -24,7 +24,8 @@ enum
     PRINT_COLOR_WHITE = 15,
 };
 
-void print_clear();
+void print_init(void);
+void print_clear(void);
 void print_char(char c);
 void print_str(char *str);
 void print_set_color(char foreground, char background);

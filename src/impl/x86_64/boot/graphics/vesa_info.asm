@@ -10,3 +10,8 @@
 ;     .CountOf64KBlocks resw 1       ; Number of 64KB memory blocks
 ;     .OEMSoftwareRevision resw 1       ; OEM Software revision
 ;     .OEMVendorNamePtr resd 1       ; Pointer to OEM Vendor Name String
+;     .OEMProductNamePtr resd 1       ; Pointer to OEM Product Name String
+;     .OEMProductRevPtr  resd 1       ; Pointer to OEM Product Revision String
+;     .Reserved          resb 222     ; Reserved for VBE implementation scratch area
+;     .OEMData           resb 256     ; Data area for OEM strings
+; endstruc

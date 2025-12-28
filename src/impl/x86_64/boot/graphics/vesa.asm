@@ -10,7 +10,7 @@
 ; vbe_info_block_addr:   equ 0x00095000  ; Address for VBE info block
 
 ; section .text
-; bits 32
+; bits 16
 
 ; struc VesaModeInfoBlock				;	VesaModeInfoBlock_size = 256 bytes
 ; 	.ModeAttributes		resw 1

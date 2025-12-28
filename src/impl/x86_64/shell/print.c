@@ -172,6 +172,13 @@ char *itoa(int value, int base)
     return ptr;
 }
 
+void print_hex(uint64_t value)
+{
+    print_str("0x");
+    char *hex_str = itoa((int)value, 16);
+    print_str(hex_str);
+}
+
 void printf(const char *format, ...)
 {
     va_list args;

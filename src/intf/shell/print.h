@@ -29,3 +29,4 @@ void print_char(char c);
 void print_str(char *str);
 void print_set_color(char foreground, char background);
 void printf(const char *format, ...);
+void print_hex(uint64_t value);

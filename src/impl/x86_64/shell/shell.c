@@ -2,6 +2,7 @@
 #include <shell/shell.h>
 #include <shell/print.h>
 #include <interrupts/io/keyboard.h>
+#include <graphics/graphics.h>
 
 // Constants
 #define MAX_COMMAND_LENGTH 64
@@ -28,6 +29,8 @@ static void cmd_help(void);
 static void cmd_clear(void);
 static void cmd_info(void);
 static void cmd_reboot(void);
+static void cmd_draw(int argc, char **argv);
+static void cmd_cls(void);
 
 // Command table
 static const command_t commands[MAX_COMMANDS] = {
@@ -35,7 +38,7 @@ static const command_t commands[MAX_COMMANDS] = {
     {"clear", "Clear the screen", cmd_clear},
     {"info", "Show system information", cmd_info},
     {"reboot", "Reboot the system", cmd_reboot},
-    {NULL, NULL, NULL}, // End of commands
+    {"draw", "Draw shapes (draw triangle|rect|line|pixel)", cmd_draw},
     {NULL, NULL, NULL},
     {NULL, NULL, NULL},
     {NULL, NULL, NULL}};
@@ -98,6 +101,144 @@ static void reset_command_buffer(void)
     {
         command_buffer[i] = 0;
     }
+}
+
+static void cmd_cls(void)
+{
+    clear_screen(COLOR_BLACK);
+    print_str("Graphics screen cleared\n");
+}
+
+static void cmd_draw(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        print_str("Usage: draw <shape> [args]\n");
+        print_str("Shapes:\n");
+        print_str("  triangle <x0> <y0> <x1> <y1> <x2> <y2> <color>\n");
+        print_str("  rect <x> <y> <w> <h> <color>\n");
+        print_str("  line <x0> <y0> <x1> <y1> <color>\n");
+        print_str("  pixel <x> <y> <color>\n");
+        print_str("Colors: red, green, blue, white, yellow, cyan, magenta\n");
+        return;
+    }
+
+    // Helper to parse color
+    uint32_t parse_color(const char *str)
+    {
+        if (strcmp(str, "red") == 0)
+            return COLOR_RED;
+        if (strcmp(str, "green") == 0)
+            return COLOR_GREEN;
+        if (strcmp(str, "blue") == 0)
+            return COLOR_BLUE;
+        if (strcmp(str, "white") == 0)
+            return COLOR_WHITE;
+        if (strcmp(str, "yellow") == 0)
+            return COLOR_YELLOW;
+        if (strcmp(str, "cyan") == 0)
+            return COLOR_CYAN;
+        if (strcmp(str, "magenta") == 0)
+            return COLOR_MAGENTA;
+        if (strcmp(str, "black") == 0)
+            return COLOR_BLACK;
+        return COLOR_WHITE; // default
+    }
+
+    if (strcmp(argv[1], "triangle") == 0)
+    {
+        if (argc < 9)
+        {
+            print_str("Usage: draw triangle <x0> <y0> <x1> <y1> <x2> <y2> <color>\n");
+            return;
+        }
+
+        int x0 = atoi(argv[2]);
+        int y0 = atoi(argv[3]);
+        int x1 = atoi(argv[4]);
+        int y1 = atoi(argv[5]);
+        int x2 = atoi(argv[6]);
+        int y2 = atoi(argv[7]);
+        uint32_t color = parse_color(argv[8]);
+
+        draw_triangle(x0, y0, x1, y1, x2, y2, color);
+        print_str("Triangle drawn!\n");
+    }
+    else if (strcmp(argv[1], "rect") == 0)
+    {
+        if (argc < 7)
+        {
+            print_str("Usage: draw rect <x> <y> <w> <h> <color>\n");
+            return;
+        }
+
+        int x = atoi(argv[2]);
+        int y = atoi(argv[3]);
+        int w = atoi(argv[4]);
+        int h = atoi(argv[5]);
+        uint32_t color = parse_color(argv[6]);
+
+        fill_rect(x, y, w, h, color);
+        print_str("Rectangle drawn!\n");
+    }
+    else if (strcmp(argv[1], "line") == 0)
+    {
+        if (argc < 7)
+        {
+            print_str("Usage: draw line <x0> <y0> <x1> <y1> <color>\n");
+            return;
+        }
+
+        int x0 = atoi(argv[2]);
+        int y0 = atoi(argv[3]);
+        int x1 = atoi(argv[4]);
+        int y1 = atoi(argv[5]);
+        uint32_t color = parse_color(argv[6]);
+
+        draw_line(x0, y0, x1, y1, color);
+        print_str("Line drawn!\n");
+    }
+    else if (strcmp(argv[1], "pixel") == 0)
+    {
+        if (argc < 5)
+        {
+            print_str("Usage: draw pixel <x> <y> <color>\n");
+            return;
+        }
+
+        int x = atoi(argv[2]);
+        int y = atoi(argv[3]);
+        uint32_t color = parse_color(argv[4]);
+
+        put_pixel(x, y, color);
+        print_str("Pixel drawn!\n");
+    }
+    else
+    {
+        print_str("Unknown shape: ");
+        print_str(argv[1]);
+        print_str("\n");
+    }
+}
+
+int atoi(const char *str)
+{
+    int result = 0;
+    int sign = 1;
+
+    if (*str == '-')
+    {
+        sign = -1;
+        str++;
+    }
+
+    while (*str >= '0' && *str <= '9')
+    {
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    return result * sign;
 }
 
 // Command implementations

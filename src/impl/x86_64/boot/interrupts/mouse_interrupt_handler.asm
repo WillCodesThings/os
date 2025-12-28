@@ -1,16 +1,16 @@
-global mouse_interrupt_handler
+[BITS 64]
+[GLOBAL mouse_interrupt_handler]
+[EXTERN mouse_handle_interrupt]
 
-extern mouse_handle_interrupt
-
-section .text
 mouse_interrupt_handler:
+    ; Save general-purpose registers (except rsp)
     push rax
-    push rbx
     push rcx
     push rdx
+    push rbx
+    push rbp
     push rsi
     push rdi
-    push rbp
     push r8
     push r9
     push r10
@@ -20,12 +20,30 @@ mouse_interrupt_handler:
     push r14
     push r15
     
+
+    ; Save segment registers (optional but good practice)
+    ; Not strictly necessary in long mode, but may help prevent bugs
+    ; push ds
+    ; push es
+    ; push fs
+    ; push gs
+
+    ; Call the C-level handler
     call mouse_handle_interrupt
-    
-    ; Send EOI to slave PIC (IRQ12 is on slave)
+
+    ; Send End of Interrupt (EOI) to the PIC
     mov al, 0x20
-    out 0xA0, al  ; Slave PIC
-    out 0x20, al  ; Master PIC
+    out 0xA0, al ; slave PIC
+    out 0x20, al ; master PIC
+
+
+    ; Restore segment registers (if saved)
+    ; pop gs
+    ; pop fs
+    ; pop es
+    ; pop ds
+
+    ; Restore general-purpose registers
     
     pop r15
     pop r14
@@ -35,12 +53,13 @@ mouse_interrupt_handler:
     pop r10
     pop r9
     pop r8
-    pop rbp
     pop rdi
     pop rsi
+    pop rbp
+    pop rbx
     pop rdx
     pop rcx
-    pop rbx
     pop rax
-    
+
+    ; Return from interrupt
     iretq

@@ -15,6 +15,8 @@ static mouse_state_t mouse_state = {0};
 static volatile uint8_t mouse_cycle = 0;
 static volatile int8_t mouse_bytes[3];
 
+// volatile uint32_t mouse_interrupt_count = 0;
+
 // Wait for mouse to be ready to write
 static void mouse_wait_write(void)
 {
@@ -60,6 +62,7 @@ static uint8_t mouse_read(void)
 // This gets called from the ASM handler
 void mouse_handle_interrupt(void)
 {
+    // mouse_interrupt_count++;
     uint8_t status = inb(MOUSE_STATUS);
 
     if (!(status & 0x20))
@@ -132,56 +135,140 @@ void mouse_handle_interrupt(void)
 
 void mouse_init(void)
 {
-    print_str("Initializing mouse...\n");
+    serial_print("Initializing mouse...\n");
 
-    // Enable auxiliary mouse device
+    uint8_t status;
+
+    // Disable devices during setup
+    mouse_wait_write();
+    outb(MOUSE_CMD, 0xAD); // Disable keyboard
+    mouse_wait_write();
+    outb(MOUSE_CMD, 0xA7); // Disable mouse
+
+    // Flush output buffer
+    inb(MOUSE_PORT);
+
+    // Enable auxiliary device
     mouse_wait_write();
     outb(MOUSE_CMD, 0xA8);
+    serial_print("Enabled auxiliary device\n");
 
-    // Get compaq status byte
+    // Get controller configuration byte
     mouse_wait_write();
     outb(MOUSE_CMD, 0x20);
     mouse_wait_read();
-    uint8_t status = inb(MOUSE_PORT);
+    status = inb(MOUSE_PORT);
+    serial_print("Controller config: ");
+    serial_print_hex(status);
+    serial_print("\n");
 
-    // Set compaq status byte (enable IRQ12)
-    status |= 0x02;  // Enable IRQ12
-    status &= ~0x20; // Enable mouse clock
+    // Enable interrupts and mouse clock
+    status |= 0x02;  // Enable mouse interrupt
+    status |= 0x01;  // Enable keyboard interrupt
+    status &= ~0x10; // Enable mouse clock
+    status &= ~0x20; // Enable keyboard clock
 
+    // Write back configuration
     mouse_wait_write();
     outb(MOUSE_CMD, 0x60);
     mouse_wait_write();
     outb(MOUSE_PORT, status);
 
-    // Use default settings
+    // Reset mouse
+    serial_print("Resetting mouse...\n");
+    mouse_write(0xFF);
+    mouse_wait_read();
+    uint8_t reset_ack = inb(MOUSE_PORT);
+    serial_print("Reset ACK: ");
+    serial_print_hex(reset_ack);
+    serial_print("\n");
+
+    // Should receive 0xAA (self-test passed) and 0x00 (mouse ID)
+    mouse_wait_read();
+    uint8_t self_test = inb(MOUSE_PORT);
+    serial_print("Self-test: ");
+    serial_print_hex(self_test);
+    serial_print("\n");
+
+    if (self_test == 0xAA)
+    {
+        mouse_wait_read();
+        uint8_t mouse_id = inb(MOUSE_PORT);
+        serial_print("Mouse ID: ");
+        serial_print_hex(mouse_id);
+        serial_print("\n");
+    }
+
+    // Set defaults
     mouse_write(0xF6);
-    mouse_read(); // Acknowledge
+    mouse_wait_read();
+    uint8_t defaults_ack = inb(MOUSE_PORT);
+    serial_print("Defaults ACK: ");
+    serial_print_hex(defaults_ack);
+    serial_print("\n");
 
     // Enable data reporting
     mouse_write(0xF4);
-    mouse_read(); // Acknowledge
+    mouse_wait_read();
+    uint8_t enable_ack = inb(MOUSE_PORT);
+    serial_print("Enable ACK: ");
+    serial_print_hex(enable_ack);
+    serial_print("\n");
 
-    // Initialize mouse state
+    // Re-enable devices
+    mouse_wait_write();
+    outb(MOUSE_CMD, 0xAE); // Re-enable keyboard
+
+    // Initialize state
     extern uint32_t screen_width;
     extern uint32_t screen_height;
 
     mouse_state.x = screen_width / 2;
     mouse_state.y = screen_height / 2;
     mouse_state.buttons = 0;
-    mouse_state.delta_x = 0;
-    mouse_state.delta_y = 0;
-
     mouse_cycle = 0;
 
-    // Register the mouse handler - IRQ12 is interrupt 0x2C (32 + 12)
+    // Register interrupt handler
+    serial_print("Registering interrupt handler at 0x2C\n");
     idt_set_gate(0x2C, (uint64_t)mouse_interrupt_handler);
 
-    // Unmask IRQ12 in PIC (slave PIC)
-    uint8_t mask = inb(0xA1);
-    mask &= ~(1 << 4); // IRQ12 is bit 4 on slave PIC
-    outb(0xA1, mask);
+    // Unmask IRQ12 on slave PIC
+    uint8_t slave_mask = inb(0xA1);
+    slave_mask &= ~(1 << 4);
+    outb(0xA1, slave_mask);
 
-    print_str("Mouse initialized!\n");
+    // Unmask IRQ2 on master PIC (cascade)
+    uint8_t master_mask = inb(0x21);
+    master_mask &= ~(1 << 2);
+    outb(0x21, master_mask);
+
+    serial_print("Mouse initialized!\n");
+}
+
+// Add this test function
+void mouse_test_polling(void)
+{
+    serial_print("Testing mouse with polling...\n");
+
+    for (int i = 0; i < 10; i++)
+    {
+        // Wait a bit
+        for (volatile int j = 0; j < 10000000; j++)
+            ;
+
+        // Check if data is available
+        uint8_t status = inb(MOUSE_STATUS);
+        serial_print("Status: ");
+        serial_print_hex(status);
+
+        if (status & 0x01)
+        {
+            uint8_t data = inb(MOUSE_PORT);
+            serial_print(" Data: ");
+            serial_print_hex(data);
+        }
+        serial_print("\n");
+    }
 }
 
 mouse_state_t mouse_get_state(void)

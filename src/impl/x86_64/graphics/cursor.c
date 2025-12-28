@@ -9,6 +9,8 @@ static int32_t cursor_y = 0;
 static uint32_t saved_background[CURSOR_WIDTH * CURSOR_HEIGHT];
 static uint8_t cursor_visible = 1;
 
+uint32_t cursor_color = 0xFFFFFF; // White
+
 // Simple arrow cursor bitmap
 static const uint8_t cursor_bitmap[CURSOR_HEIGHT] = {
     0b10000000, // *
@@ -73,7 +75,7 @@ void cursor_draw(void)
                 screen_y >= 0 && screen_y < (int)get_screen_height())
             {
                 // We need a get_pixel function - for now just use black
-                saved_background[y * CURSOR_WIDTH + x] = 0x000000;
+                saved_background[y * CURSOR_WIDTH + x] = get_pixel_color(screen_x, screen_y);
             }
         }
     }
@@ -92,14 +94,19 @@ void cursor_draw(void)
                 if (screen_x >= 0 && screen_x < (int)get_screen_width() &&
                     screen_y >= 0 && screen_y < (int)get_screen_height())
                 {
-                    // Draw white cursor with black outline
-                    put_pixel(screen_x, screen_y, 0xFFFFFF);
+                    // Draw cursor with specified color
+                    put_pixel(screen_x, screen_y, cursor_color);
                 }
             }
         }
     }
 
     cursor_visible = 1;
+}
+
+void set_cursor_color(uint32_t color)
+{
+    cursor_color = color;
 }
 
 void cursor_update(int32_t x, int32_t y)

@@ -3,6 +3,7 @@
 #include <interrupts/io/keyboard.h>
 #include <interrupts/io/mouse.h>
 #include <graphics/cursor.h>
+#include <shell/print.h>
 #include <shell/shell.h>
 
 void kernel_main(void)
@@ -12,17 +13,17 @@ void kernel_main(void)
     print_init();
 
     init_interrupts_safe();
-    test_interrupts();
+    // test_interrupts();
 
     keyboard_init();
     mouse_init();
-    // cursor_init();
 
-    // cursor_show();
+    cursor_init();
+    cursor_show();
 
     enable_interrupts();
 
-    debug_print_interrupt(0x2C); // IRQ12
+    // debug_print_interrupt(0x2C); // IRQ12
 
     // Draw a welcome screen
     uint32_t cx = get_screen_width() / 2;
@@ -31,6 +32,8 @@ void kernel_main(void)
     draw_triangle(cx, cy - 100, cx - 100, cy + 100, cx + 100, cy + 100, COLOR_CYAN, 1);
     // draw_triangle_3colors(cx, cy - 80, cx - 80, cy + 80, cx + 80, cy + 80, COLOR_MAGENTA, COLOR_YELLOW, COLOR_GREEN);
     fill_rect(10, 10, 200, 50, COLOR_BLUE);
+
+    // mouse_test_polling();
 
     shell_run();
 }

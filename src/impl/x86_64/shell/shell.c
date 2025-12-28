@@ -470,27 +470,61 @@ void shell_run(void)
             }
         }
 
+        static int32_t last_x = -1;
+        static int32_t last_y = -1;
+        static uint8_t last_buttons = 0;
+
         // Handle mouse
-        static int32_t last_x = -1, last_y = -1;
         mouse_state_t mouse = mouse_get_state();
 
-        if (mouse.x != last_x || mouse.y != last_y)
+        // Update if position OR buttons changed
+        if (mouse.x != last_x || mouse.y != last_y || mouse.buttons != last_buttons)
         {
-            serial_print("Mouse moved to: ");
-            serial_print_dec(mouse.x);
-            serial_print(", ");
-            serial_print_dec(mouse.y);
-            serial_print("\n");
             cursor_update(mouse.x, mouse.y);
             last_x = mouse.x;
             last_y = mouse.y;
+            last_buttons = mouse.buttons;
+
+            // Optional: Handle click events
+            if (mouse.buttons & MOUSE_LEFT_BUTTON)
+            {
+                set_cursor_color(0xFF0000); // Change cursor color on click
+
+                draw_circle(mouse.x, mouse.y, 3, 0xFFFF00, 1);
+                // You can add click handling here
+                // For example, draw a dot where clicked:
+                // put_pixel(mouse.x, mouse.y, 0xFFFF00);
+            }
+            else if (mouse.buttons & MOUSE_RIGHT_BUTTON)
+            {
+                set_cursor_color(0x0000FF); // Change cursor color on right click
+                // clear the dot where right-clicked:
+                draw_circle(mouse.x, mouse.y, 3, COLOR_BLACK, 1);
+            }
+            else if (mouse.buttons & MOUSE_MIDDLE_BUTTON)
+            {
+                set_cursor_color(0x00FF00); // Change cursor color on middle click
+            }
+            else
+            {
+                set_cursor_color(0xFFFFFF); // Default cursor color
+            }
         }
 
-        // Handle mouse clicks (example)
-        if (mouse.buttons & MOUSE_LEFT_BUTTON)
-        {
-            // Left click - draw a dot
-            put_pixel(mouse.x, mouse.y, COLOR_RED);
-        }
+        // // Debug: show interrupt count occasionally
+        // extern volatile uint32_t mouse_interrupt_count;
+        // static uint32_t last_count = 0;
+        // static int tick = 0;
+        // if (++tick > 100000)
+        // {
+        //     tick = 0;
+        //     if (mouse_interrupt_count != last_count)
+        //     {
+        //         serial_print("IRQ count: ");
+        //         serial_print_dec(mouse_interrupt_count);
+        //         serial_print("\n");
+        //         last_count = mouse_interrupt_count;
+        //     }
+        // }
     }
 }

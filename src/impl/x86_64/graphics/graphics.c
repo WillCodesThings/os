@@ -22,6 +22,15 @@ void put_pixel(uint32_t x, uint32_t y, uint32_t color)
     framebuffer[y * (pitch / 4) + x] = color;
 }
 
+uint32_t get_pixel_color(uint32_t x, uint32_t y)
+{
+    if (x >= screen_width || y >= screen_height)
+        return 0;
+    uint32_t color = framebuffer[y * (pitch / 4) + x];
+
+    return color;
+}
+
 void clear_screen(uint32_t color)
 {
     uint32_t total_pixels = (pitch / 4) * screen_height;

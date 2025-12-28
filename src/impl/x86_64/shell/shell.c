@@ -5,10 +5,12 @@
 #include <graphics/graphics.h>
 #include <interrupts/io/mouse.h>
 #include <graphics/cursor.h>
+#include <fs/vfs.h>
+#include <fs/tmpfs.h>
 
 // Constants
 #define MAX_COMMAND_LENGTH 64
-#define MAX_COMMANDS 8
+#define MAX_COMMANDS 9
 #define MAX_ARGS 10
 #define PROMPT "> "
 
@@ -38,6 +40,9 @@ static void cmd_info(int argc, char **argv);
 static void cmd_reboot(int argc, char **argv);
 static void cmd_draw(int argc, char **argv);
 static void cmd_cls(int argc, char **argv);
+static void cmd_ls(int argc, char **argv);
+static void cmd_cat(int argc, char **argv);
+static void cmd_heap(int argc, char **argv);
 
 // Command table
 static const command_t commands[MAX_COMMANDS] = {
@@ -47,8 +52,11 @@ static const command_t commands[MAX_COMMANDS] = {
     {"reboot", "Reboot the system", cmd_reboot},
     {"draw", "Draw shapes (draw triangle|rect|line|pixel)", cmd_draw},
     {"cls", "Clear the graphics screen", cmd_cls},
-    {NULL, NULL, NULL},
-    {NULL, NULL, NULL}};
+    {"ls", "List directory contents", cmd_ls},
+    {"cat", "Display file contents", cmd_cat},
+    {"heap", "Show heap statistics", cmd_heap},
+    {NULL, NULL, NULL} // Sentinel
+};
 
 // String comparison function
 static int strcmp(const char *s1, const char *s2)
@@ -197,6 +205,29 @@ static void cmd_cls(int argc, char **argv)
     print_str("Graphics screen cleared\n");
 }
 
+static void cmd_heap(int argc, char **argv)
+{
+    uint32_t total, used, free;
+    heap_stats(&total, &used, &free);
+
+    print_str("Heap Statistics:\n");
+    print_str("  Total: ");
+    print_int(total / 1024);
+    print_str(" KB\n");
+
+    print_str("  Used:  ");
+    print_int(used / 1024);
+    print_str(" KB (");
+    print_int((used * 100) / total);
+    print_str("%)\n");
+
+    print_str("  Free:  ");
+    print_int(free / 1024);
+    print_str(" KB (");
+    print_int((free * 100) / total);
+    print_str("%)\n");
+}
+
 static void cmd_draw(int argc, char **argv)
 {
     if (argc < 2)
@@ -328,6 +359,70 @@ static void cmd_help(int argc, char **argv)
         print_str(commands[i].description);
         print_str("\n");
     }
+}
+
+static void cmd_ls(int argc, char **argv)
+{
+    const char *path = (argc > 1) ? argv[1] : "/";
+
+    vfs_node_t *dir = vfs_resolve_path(path);
+    if (!dir)
+    {
+        print_str("Directory not found\n");
+        return;
+    }
+
+    if (!(dir->flags & VFS_DIRECTORY))
+    {
+        print_str("Not a directory\n");
+        return;
+    }
+
+    print_str("Contents of ");
+    print_str(path);
+    print_str(":\n");
+
+    uint32_t i = 0;
+    vfs_node_t *child;
+    while ((child = vfs_readdir(dir, i++)) != NULL)
+    {
+        print_str("  ");
+        if (child->flags & VFS_DIRECTORY)
+            print_str("[DIR]  ");
+        else
+            print_str("[FILE] ");
+        print_str(child->name);
+        print_str("\n");
+    }
+}
+
+static void cmd_cat(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        print_str("Usage: cat <file>\n");
+        return;
+    }
+
+    vfs_node_t *file = vfs_open(argv[1], VFS_READ);
+    if (!file)
+    {
+        print_str("File not found\n");
+        return;
+    }
+
+    uint8_t buffer[256];
+    int bytes = vfs_read(file, 0, 256, buffer);
+
+    if (bytes > 0)
+    {
+        for (int i = 0; i < bytes; i++)
+        {
+            print_char(buffer[i]);
+        }
+    }
+
+    vfs_close(file);
 }
 
 static void cmd_clear(int argc, char **argv)

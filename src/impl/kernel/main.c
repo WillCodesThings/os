@@ -5,6 +5,8 @@
 #include <graphics/cursor.h>
 #include <shell/print.h>
 #include <shell/shell.h>
+#include <fs/vfs.h>
+#include <fs/tmpfs.h>
 
 void kernel_main(void)
 {
@@ -22,6 +24,9 @@ void kernel_main(void)
     cursor_show();
 
     enable_interrupts();
+
+    vfs_init();
+    tmpfs_init();
 
     // debug_print_interrupt(0x2C); // IRQ12
 

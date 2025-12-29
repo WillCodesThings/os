@@ -177,6 +177,15 @@ const char *vfs_get_filename(const char *path)
     return last_slash;
 }
 
-int vfs_mount(const char *device, const char *mountpoint)
+int vfs_mount(const char *path, vfs_node_t *mountpoint)
 {
+    if (!path || !mountpoint)
+        return -1;
+    vfs_node_t *node = vfs_resolve_path(path);
+    if (!node)
+        return -1;
+
+    node->mountpoint = mountpoint;
+    vfs_root->parent = node;
+    return 0;
 }

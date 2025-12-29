@@ -52,6 +52,8 @@ struct vfs_node
 
     vfs_node_t *parent; // Parent directory
     void *filesystem;   // Pointer to filesystem-specific data
+
+    struct vfs_node *mountpoint; // Mounted filesystem root (if any)
 };
 
 // VFS API functions
@@ -65,7 +67,7 @@ vfs_node_t *vfs_readdir(vfs_node_t *node, uint32_t index);
 vfs_node_t *vfs_finddir(vfs_node_t *node, const char *name);
 int vfs_create(const char *path, uint32_t flags);
 int vfs_delete(const char *path);
-int vfs_mount(const char *device, const char *mountpoint);
+int vfs_mount(const char *device, vfs_node_t *mountpoint);
 
 // Helper functions
 vfs_node_t *vfs_resolve_path(const char *path);

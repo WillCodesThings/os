@@ -6,7 +6,8 @@
 #include <shell/print.h>
 #include <shell/shell.h>
 #include <fs/vfs.h>
-#include <fs/tmpfs.h>
+#include <fs/simplefs.h>
+#include <disk/block_device.h>
 
 void kernel_main(void)
 {
@@ -26,7 +27,12 @@ void kernel_main(void)
     enable_interrupts();
 
     vfs_init();
-    tmpfs_init();
+    // tmpfs_init();
+    simplefs_init();
+    simplefs_mount(get_block_device());
+    simplefs_format(get_block_device(), 1024, 10);
+
+    simplefs_test_setup();
 
     // debug_print_interrupt(0x2C); // IRQ12
 

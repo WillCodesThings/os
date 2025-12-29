@@ -4,7 +4,7 @@
 // Simple block-based allocator with headers
 
 #define HEAP_START 0x100000 // Start at 1MB
-#define HEAP_SIZE 0x1000000 // 16MB heap
+#define HEAP_SIZE 0x2000000 // 32MB heap
 #define HEAP_MAGIC 0xDEADBEEF
 
 typedef struct heap_block

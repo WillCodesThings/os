@@ -28,9 +28,11 @@ void kernel_main(void)
 
     vfs_init();
     // tmpfs_init();
-    simplefs_init();
-    simplefs_mount(get_block_device());
-    simplefs_format(get_block_device(), 1024, 10);
+    block_device_t *device = get_block_device();
+
+    simplefs_init(device);
+    simplefs_mount(device);
+    simplefs_format(device, 1024, 10);
 
     simplefs_test_setup();
 

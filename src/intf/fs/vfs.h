@@ -69,6 +69,11 @@ int vfs_create(const char *path, uint32_t flags);
 int vfs_delete(const char *path);
 int vfs_mount(const char *device, vfs_node_t *mountpoint);
 
+//string helper functions
+static int strncmp(const char *s1, const char *s2, size_t n);
+static void strcpy(char *dest, const char *src);
+static char *strdup(const char *str);
+
 // Helper functions
 vfs_node_t *vfs_resolve_path(const char *path);
 const char *vfs_get_filename(const char *path);

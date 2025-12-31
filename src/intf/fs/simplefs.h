@@ -9,17 +9,13 @@
 
 typedef struct simplefs_header
 {
-    char signature[4]; // "SFS\0"
+    uint32_t magic; // "SFS!"
     uint32_t version;
-    uint32_t inode_count;
-    uint32_t block_size;
 } simplefs_header_t;
 
 typedef struct simplefs_superblock
 {
-    uint32_t magic;   // 0x53465321 "SFS!" -- SimpleFS magic number
-    uint32_t version; // Filesystem version
-
+    simplefs_header_t *header;
     // Block information (group related fields)
     uint32_t block_size;       // Size of each block (512, 1024, 4096, etc.)
     uint32_t total_blocks;     // Total blocks in filesystem
@@ -27,6 +23,7 @@ typedef struct simplefs_superblock
     uint32_t first_data_block; // First block available for data
 
     // Inode information
+    uint32_t max_inode_count;   // max inode count
     uint32_t inode_count;       // Total inodes
     uint32_t free_inode_count;  // Free inodes
     uint32_t inodetable_start;  // Starting block of inode table
@@ -88,7 +85,7 @@ typedef struct simplefs_filesystem
 } __attribute__((packed)) simplefs_filesystem_t;
 
 // Initialize SimpleFS
-void simplefs_init(void);
+void simplefs_init(block_device_t *block_device);
 // Mount SimpleFS from a given device
 int simplefs_mount(block_device_t *block_device);
 // Read a file from SimpleFS

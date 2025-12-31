@@ -1,7 +1,8 @@
 #include <fs/vfs.h>
 #include <shell/print.h>
-
+#include <shell/shell.h>
 #include <memory/heap.h>
+#include <utils/string.h>
 
 static vfs_node_t *vfs_root = NULL;
 
@@ -19,14 +20,6 @@ static int strncmp(const char *s1, const char *s2, size_t n)
     return *(unsigned char *)s1 - *(unsigned char *)s2;
 }
 
-static size_t strlen(const char *str)
-{
-    size_t len = 0;
-    while (str[len])
-        len++;
-    return len;
-}
-
 static void strcpy(char *dest, const char *src)
 {
     while (*src)
@@ -38,11 +31,11 @@ static void strcpy(char *dest, const char *src)
 
 static char *strdup(const char *str)
 {
-    size_t len = strlen(str) + 1;
+    uint8_t len = strlen(str) + 1;
     char *copy = (char *)kmalloc(len);
     if (copy)
     {
-        for (size_t i = 0; i < len; i++)
+        for (uint8_t i = 0; i < len; i++)
         {
             copy[i] = str[i];
         }

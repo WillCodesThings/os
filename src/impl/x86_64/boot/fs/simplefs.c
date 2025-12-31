@@ -4,8 +4,10 @@
 #include <fs/tmpfs.h>
 #include <memory/heap.h>
 #include <shell/print.h>
+#include <utils/string.h>
 
 simplefs_superblock_t simplefs_superblock;
+simplefs_header_t *simplefs_header = NULL;
 vfs_node_t *simplefs_root = NULL;
 simplefs_filesystem_t *simplefs_fs = NULL;
 
@@ -40,6 +42,10 @@ void simplefs_init(block_device_t *block_device)
     // Attach filesystem to root VFS node
     simplefs_root->filesystem = simplefs_fs;
 
+    simplefs_header = (simplefs_header_t *)kmalloc(sizeof(simplefs_header_t));
+    simplefs_header->version = 1;
+    simplefs_header->magic = 0x53465321;
+
     // Mount the filesystem
     vfs_set_root(simplefs_root);
     simplefs_block_device = block_device;
@@ -51,9 +57,9 @@ void simplefs_format(block_device_t *block_device, uint32_t total_blocks, int re
 {
     simplefs_superblock_t sb;
     serial_print("Formatting SimpleFS...\n");
-
-    sb.magic = 0x53465321; // "SFS!"
-    sb.version = 1;
+    
+    sb.header = simplefs_header;
+    sb.block_size = 4096;
     sb.total_blocks = total_blocks;
     sb.free_block_count = sb.total_blocks - reserved_blocks;
     sb.first_data_block = reserved_blocks;
@@ -78,24 +84,25 @@ int simplefs_mount(block_device_t *block_device)
     simplefs_superblock_t sb;
     block_device->read_block(block_device, 0, (uint8_t *)&sb);
 
-    if (sb.magic != 0x53465321)
+    if (sb.header->magic != 0x53465321)
     {
         serial_print("Invalid filesystem magic!\n");
         return -1;
     }
 
-    if (sb.version > 1)
+    if (sb.header->version > 1)
     {
         serial_print("Unsupported filesystem version\n");
         return -1;
     }
 
+    sb.max_inode_count = sb.inodetable_start * (sb.block_size / sizeof(simplefs_inode_t));
     // Cache superblock
     simplefs_superblock = sb;
     simplefs_fs->superblock = sb;
 
     serial_print("Mounted SimpleFS v");
-    print_int(sb.version);
+    print_int(sb.header->version);
     serial_print("\n");
 
     return 0;
@@ -123,13 +130,13 @@ int simplefs_read_block(uint32_t block_number, void *buffer)
 int simplefs_read_file(uint32_t inode_number, uint8_t *buffer, uint32_t size, uint32_t offset)
 {
     simplefs_inode_t inode;
-    simplefs_device->read_block(simplefs_device, simplefs.superblock.inodetable_start + inode_number, (uint8_t *)&inode);
+    simplefs_fs->device->read_block(simplefs_fs->device, simplefs_fs->superblock.inodetable_start + inode_number, (uint8_t *)&inode);
 
     if (inode.file_size == 0 || size == 0)
         return 0;
 
     uint32_t block_num = inode.direct_blocks[0]; // single-block file for now
-    simplefs_device->read_block(simplefs_device, block_num, buffer);
+    simplefs_fs->device->read_block(simplefs_fs->device, block_num, buffer);
 
     return inode.file_size;
 }
@@ -137,31 +144,30 @@ int simplefs_read_file(uint32_t inode_number, uint8_t *buffer, uint32_t size, ui
 int simplefs_write_file(uint32_t inode_number, const uint8_t *buffer, uint32_t size, uint32_t offset)
 {
     simplefs_inode_t inode;
-    simplefs_device->read_block(simplefs_device, simplefs.superblock.inodetable_start + inode_number, (uint8_t *)&inode);
+    simplefs_fs->device->read_block(simplefs_fs->device, simplefs_fs->superblock.inodetable_start + inode_number, (uint8_t *)&inode);
 
     if (inode.direct_blocks[0] == 0)
     {
         // Allocate first block
-        inode.direct_blocks[0] = simplefs.superblock.first_data_block + inode_number;
-        inode.block_count = 1;
+        inode.direct_blocks[0] = simplefs_fs->superblock.first_data_block + inode_number;
     }
 
-    simplefs_device->write_block(simplefs_device, inode.direct_blocks[0], buffer);
+    simplefs_fs->device->write_block(simplefs_fs->device, inode.direct_blocks[0], buffer);
 
     inode.file_size = size;
-    simplefs_device->write_block(simplefs_device, simplefs.superblock.inodetable_start + inode_number, (uint8_t *)&inode);
+    simplefs_fs->device->write_block(simplefs_fs->device, simplefs_fs->superblock.inodetable_start + inode_number, (uint8_t *)&inode);
 
     return size;
 }
 
 int simplefs_list_dir(uint32_t dir_inode_number)
 {
-    if (!simplefs_device)
+    if (!simplefs_fs->device)
         return -1;
 
     // Read root directory block
     simplefs_dir_entry_t entries[64]; // assume 64 entries max per block
-    simplefs_device->read_block(simplefs_device, simplefs.superblock.first_data_block, (uint8_t *)entries);
+    simplefs_fs->device->read_block(simplefs_fs->device, simplefs_fs->superblock.first_data_block, (uint8_t *)entries);
 
     serial_print("Directory listing:\n");
     for (int i = 0; i < 64; i++)
@@ -179,11 +185,11 @@ int simplefs_list_dir(uint32_t dir_inode_number)
 
 int simplefs_find_file(uint32_t dir_inode_number, const char *filename, uint32_t *out_inode_number)
 {
-    if (!simplefs_device || !filename || !out_inode_number)
+    if (!simplefs_fs->device || !filename || !out_inode_number)
         return -1;
 
     simplefs_dir_entry_t entries[64];
-    simplefs_device->read_block(simplefs_device, simplefs.superblock.first_data_block, (uint8_t *)entries);
+    simplefs_fs->device->read_block(simplefs_fs->device, simplefs_fs->superblock.first_data_block, (uint8_t *)entries);
 
     for (int i = 0; i < 64; i++)
     {
@@ -199,27 +205,27 @@ int simplefs_find_file(uint32_t dir_inode_number, const char *filename, uint32_t
 
 int simplefs_create_file(uint32_t dir_inode_number, const char *filename, uint32_t *out_inode)
 {
-    if (simplefs.superblock.free_inode_count == 0)
+    if (simplefs_fs->superblock.free_inode_count == 0)
         return -1;
 
-    uint32_t inode_number = SIMPLEFS_MAX_INODES - simplefs_fs.superblock.free_inode_count;
-    simplefs.superblock.free_inode_count--;
+    uint32_t inode_number = simplefs_fs->superblock.max_inode_count - simplefs_fs->superblock.free_inode_count;
+    simplefs_fs->superblock.free_inode_count--;
 
     simplefs_inode_t new_inode = {0};
-    simplefs_device->write_block(simplefs_device, simplefs_fs.superblock.inodetable_start + inode_number, (uint8_t *)&new_inode);
+    simplefs_fs->device->write_block(simplefs_fs->device, simplefs_fs->superblock.inodetable_start + inode_number, (uint8_t *)&new_inode);
 
     // Add to root directory block (very simplified)
     simplefs_dir_entry_t entries[64];
-    simplefs_device->read_block(simplefs_device, simplefs_fs.superblock.first_data_block, (uint8_t *)entries);
+    simplefs_fs->device->read_block(simplefs_fs->device, simplefs_fs->superblock.first_data_block, (uint8_t *)entries);
 
     simplefs_dir_entry_t entry;
     entry.inode_number = inode_number;
-    entry.name_length = (uint8_t)strlen(filename);
+    entry.name_length = strlen(filename);
     entry.file_type = 1; // file
     strcpy(entry.name, filename);
 
     entries[inode_number % 64] = entry;
-    simplefs_device->write_block(simplefs_device, simplefs_fs.superblock.first_data_block, (uint8_t *)entries);
+    simplefs_fs->device->write_block(simplefs_fs->device, simplefs_fs->superblock.first_data_block, (uint8_t *)entries);
 
     *out_inode = inode_number;
     return 0;
@@ -227,7 +233,7 @@ int simplefs_create_file(uint32_t dir_inode_number, const char *filename, uint32
 
 int simplefs_delete_file(uint32_t dir_inode_number, const char *filename)
 {
-    if (!simplefs_fs.simplefs_device || !filename)
+    if (!simplefs_fs->device || !filename)
         return -1;
 
     uint32_t inode_number;
@@ -236,11 +242,11 @@ int simplefs_delete_file(uint32_t dir_inode_number, const char *filename)
 
     // Clear inode
     simplefs_inode_t empty_inode = {0};
-    simplefs_device->write_block(simplefs_device, simplefs_fs.superblock.inodetable_start + inode_number, (uint8_t *)&empty_inode);
+    simplefs_fs->device->write_block(simplefs_fs->device, simplefs_fs->superblock.inodetable_start + inode_number, (uint8_t *)&empty_inode);
 
     // Clear directory entry
     simplefs_dir_entry_t entries[64];
-    simplefs_device->read_block(simplefs_device, simplefs_fs.superblock.first_data_block, (uint8_t *)entries);
+    simplefs_fs->device->read_block(simplefs_fs->device, simplefs_fs->superblock.first_data_block, (uint8_t *)entries);
 
     for (int i = 0; i < 64; i++)
     {
@@ -252,9 +258,9 @@ int simplefs_delete_file(uint32_t dir_inode_number, const char *filename)
         }
     }
 
-    simplefs_device->write_block(simplefs_device, simplefs.superblock.first_data_block, (uint8_t *)entries);
+    simplefs_fs->device->write_block(simplefs_fs->device, simplefs_fs->superblock.first_data_block, (uint8_t *)entries);
 
-    simplefs.superblock.free_inode_count++; // increment free inode count
+    simplefs_fs->superblock.free_inode_count++; // increment free inode count
 
     return 0;
 }

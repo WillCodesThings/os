@@ -100,3 +100,5 @@ int simplefs_create_file(uint32_t dir_inode_number, const char *filename, uint32
 int simplefs_delete_file(uint32_t dir_inode_number, const char *filename);
 // Write data to a file
 int simplefs_write_file(uint32_t inode_number, const uint8_t *buffer, uint32_t size, uint32_t offset);
+
+void kernel_test_filesystem(void);

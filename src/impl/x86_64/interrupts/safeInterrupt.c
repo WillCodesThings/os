@@ -48,7 +48,7 @@ void init_interrupts_safe()
     // Step 3: Mask all interrupts initially
     // This prevents any hardware interrupts from firing
     outb(PIC1_DATA, 0xFF); // Disable all IRQs on master PIC
-    outb(PIC2_DATA, 0xFF); // Disable all IRQs on slave PIC
+    outb(PIC2_DATA, 0xFF); // Disable all IRQs on follower PIC
 }
 
 // Function to test interrupts with careful control
@@ -124,7 +124,7 @@ void c_default_handler(int interrupt_num)
         // It's a PIC interrupt
         if (interrupt_num >= 0x28)
         {
-            // It's from the slave PIC
+            // It's from the follower PIC
             outb(PIC2_COMMAND, 0x20);
         }
         // Send EOI to master PIC for all hardware interrupts

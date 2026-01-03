@@ -1,6 +1,4 @@
-#ifndef VFS_H
-#define VFS_H
-
+#pragma once
 #include <stdint.h>
 #include <stddef.h>
 
@@ -77,5 +75,3 @@ static char *strdup(const char *str);
 // Helper functions
 vfs_node_t *vfs_resolve_path(const char *path);
 const char *vfs_get_filename(const char *path);
-
-#endif

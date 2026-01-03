@@ -1,12 +1,10 @@
 #pragma once
 #include <stdint.h>
 
-typedef int (*read_block)(struct block_device *dev, uint32_t block_num, uint8_t *buffer);
-typedef int (*write_block)(struct block_device *dev, uint32_t block_num, uint8_t *buffer);
+struct block_device; // forward declaration
 
-typedef struct
-{
-    uint32_t block_size; // Size of each block in bytes
-    read_block read_block;
-    write_block write_block;
+typedef struct block_device {
+    uint32_t block_size;
+    int (*read_block)(struct block_device *, uint32_t, uint8_t *);
+    int (*write_block)(struct block_device *, uint32_t, uint8_t *);
 } block_device_t;

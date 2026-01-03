@@ -1,5 +1,4 @@
-#ifndef SHELL_H
-#define SHELL_H
+#pragma once 
 
 #include <stdint.h>
 
@@ -18,4 +17,3 @@ static int strcmp(const char *s1, const char *s2);
 // Main shell loop - call this from kernel_main
 void shell_run(void);
 
-#endif // SHELL_H

@@ -382,9 +382,17 @@ static void cmd_ls(int argc, char **argv)
     print_str(path);
     print_str(":\n");
 
+    if (!dir->readdir)
+    {
+        print_str("Error: Directory listing not supported\n");
+        return;
+    }
+
     uint32_t i = 0;
     vfs_node_t *child;
-    while ((child = vfs_readdir(dir, i++)) != NULL)
+    int file_count = 0;
+    
+    while (i < 64 && (child = vfs_readdir(dir, i)) != NULL)
     {
         print_str("  ");
         if (child->flags & VFS_DIRECTORY)
@@ -393,6 +401,21 @@ static void cmd_ls(int argc, char **argv)
             print_str("[FILE] ");
         print_str(child->name);
         print_str("\n");
+        
+        kfree(child);
+        file_count++;
+        i++;
+    }
+    
+    if (file_count == 0)
+    {
+        print_str("  (empty)\n");
+    }
+    else
+    {
+        print_str("\nTotal: ");
+        print_int(file_count);
+        print_str(" item(s)\n");
     }
 }
 

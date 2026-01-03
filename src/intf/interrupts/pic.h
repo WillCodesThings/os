@@ -1,5 +1,4 @@
-#ifndef PIC_H
-#define PIC_H
+#pragma once 
 
 #define PIC1 0x20
 #define PIC2 0xA0
@@ -14,4 +13,3 @@
 
 void pic_remap(int offset1, int offset2);
 
-#endif

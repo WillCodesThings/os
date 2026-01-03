@@ -1,5 +1,4 @@
-#ifndef GRAPHICS_H
-#define GRAPHICS_H
+#pragma once 
 
 #include <stdint.h>
 
@@ -43,5 +42,3 @@ uint32_t get_screen_height(void);
 #define COLOR_YELLOW 0xFFFF00
 #define COLOR_CYAN 0x00FFFF
 #define COLOR_MAGENTA 0xFF00FF
-
-#endif

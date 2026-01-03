@@ -1,5 +1,4 @@
-#ifndef INTERRUPTS_SAFE_H
-#define INTERRUPTS_SAFE_H
+#pragma once
 
 #include <stdint.h>
 
@@ -20,5 +19,3 @@ void init_interrupts_safe(void);
 
 // Function to test interrupts with careful control
 void test_interrupts(void);
-
-#endif // INTERRUPTS_SAFE_H

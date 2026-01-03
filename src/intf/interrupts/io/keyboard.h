@@ -1,5 +1,4 @@
-#ifndef KEYBOARD_H
-#define KEYBOARD_H
+#pragma once 
 
 #include <stdint.h>
 
@@ -16,5 +15,3 @@ void keyboard_late_init();
 
 // Enable keyboard processing
 void keyboard_enable_processing();
-
-#endif /* KEYBOARD_H */

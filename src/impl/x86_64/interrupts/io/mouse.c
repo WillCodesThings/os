@@ -232,10 +232,10 @@ void mouse_init(void)
     serial_print("Registering interrupt handler at 0x2C\n");
     idt_set_gate(0x2C, (uint64_t)mouse_interrupt_handler);
 
-    // Unmask IRQ12 on slave PIC
-    uint8_t slave_mask = inb(0xA1);
-    slave_mask &= ~(1 << 4);
-    outb(0xA1, slave_mask);
+    // Unmask IRQ12 on follower PIC
+    uint8_t follower_mask = inb(0xA1);
+    follower_mask &= ~(1 << 4);
+    outb(0xA1, follower_mask);
 
     // Unmask IRQ2 on master PIC (cascade)
     uint8_t master_mask = inb(0x21);

@@ -28,7 +28,7 @@ typedef void (*vfs_close_fn)(vfs_node_t *node);
 typedef vfs_node_t *(*vfs_readdir_fn)(vfs_node_t *node, uint32_t index);
 typedef vfs_node_t *(*vfs_finddir_fn)(vfs_node_t *node, const char *name);
 typedef int (*vfs_create_fn)(vfs_node_t *parent, const char *name, uint32_t flags);
-typedef int (*vfs_delete_fn)(vfs_node_t *node);
+typedef int (*vfs_delete_fn)(vfs_node_t *parent, const char *name); // FIXED: Added name parameter
 
 // VFS Node structure
 struct vfs_node
@@ -57,6 +57,8 @@ struct vfs_node
 // VFS API functions
 void vfs_init(void);
 vfs_node_t *vfs_get_root(void);
+void vfs_set_root(vfs_node_t *root); // ADDED: Missing declaration
+
 vfs_node_t *vfs_open(const char *path, uint32_t flags);
 void vfs_close(vfs_node_t *node);
 int vfs_read(vfs_node_t *node, uint32_t offset, uint32_t size, uint8_t *buffer);
@@ -65,12 +67,7 @@ vfs_node_t *vfs_readdir(vfs_node_t *node, uint32_t index);
 vfs_node_t *vfs_finddir(vfs_node_t *node, const char *name);
 int vfs_create(const char *path, uint32_t flags);
 int vfs_delete(const char *path);
-int vfs_mount(const char *device, vfs_node_t *mountpoint);
-
-//string helper functions
-static int strncmp(const char *s1, const char *s2, size_t n);
-static void strcpy(char *dest, const char *src);
-static char *strdup(const char *str);
+int vfs_mount(const char *path, vfs_node_t *mountpoint); // FIXED: Changed parameter name
 
 // Helper functions
 vfs_node_t *vfs_resolve_path(const char *path);

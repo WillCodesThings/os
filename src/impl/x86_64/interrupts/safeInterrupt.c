@@ -34,6 +34,11 @@ void enable_interrupts()
     asm volatile("sti");
 }
 
+void disable_interrupts()
+{
+    asm volatile("cli");
+}
+
 // Safe initialization of interrupt subsystem
 void init_interrupts_safe()
 {
@@ -116,7 +121,7 @@ void debug_print_interrupt(int interrupt_num)
 void c_default_handler(int interrupt_num)
 {
     // Print which interrupt was triggered for debugging
-    debug_print_interrupt(interrupt_num);
+    // debug_print_interrupt(interrupt_num);
 
     // Send EOI as appropriate - crucial step!
     if (interrupt_num >= 0x20 && interrupt_num < 0x30)

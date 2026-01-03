@@ -1,8 +1,10 @@
 #pragma once
 #include <stdint.h>
 #include <disk/block_device.h>
+#include <fs/vfs.h>
 
 #define SIMPLEFS_DIRECT_BLOCKS 12
+#define ROOT_DIR_ENTRIES 64
 
 #define SIMPLEFS_MAGIC 0x53465321 // "SFS!" -- SimpleFS magic number
 #define SIMPLEFS_VERSION 1
@@ -15,7 +17,7 @@ typedef struct simplefs_header
 
 typedef struct simplefs_superblock
 {
-    simplefs_header_t *header;
+    simplefs_header_t header; // do NOT make this a pointer, can cause issues like being overwritten by the kernel
     // Block information (group related fields)
     uint32_t block_size;       // Size of each block (512, 1024, 4096, etc.)
     uint32_t total_blocks;     // Total blocks in filesystem
@@ -27,7 +29,7 @@ typedef struct simplefs_superblock
     uint32_t inode_count;       // Total inodes
     uint32_t free_inode_count;  // Free inodes
     uint32_t inodetable_start;  // Starting block of inode table
-    uint32_t inodetable_blocks; // Number of blocks for inode table (renamed for clarity)
+    uint32_t inodetable_blocks; // Number of blocks for inode table
 
     // Metadata
     uint32_t mount_count;     // Times mounted (useful for fsck)
@@ -58,47 +60,56 @@ typedef struct simplefs_dir_entry
     uint16_t record_length; // total entry size
     uint8_t name_length;
     uint8_t file_type; // file / dir
-    char name[];
+    char name[252];    // Fixed size name buffer
 } __attribute__((packed)) simplefs_dir_entry_t;
 
-typedef struct simplefs_filesystem
-{
-    const char *name; // Name of the filesystem, e.g., "SimpleFS"
+typedef struct simplefs_filesystem simplefs_filesystem_t;
 
-    // Function pointers for filesystem operations -- make this not horrid to look at
-    int (*mount)(struct simplefs_filesystem *fs, block_device_t *device);
-    int (*read_file)(struct simplefs_filesystem *fs, uint32_t inode_number, uint8_t *buffer, uint32_t size, uint32_t offset);
-    int (*write_file)(struct simplefs_filesystem *fs, uint32_t inode_number, const uint8_t *buffer, uint32_t size, uint32_t offset);
-    int (*list_dir)(struct simplefs_filesystem *fs, uint32_t inode_number);
-    int (*find_file)(struct simplefs_filesystem *fs, uint32_t dir_inode_number, const char *filename, uint32_t *out_inode_number);
-    int (*create_file)(struct simplefs_filesystem *fs, uint32_t dir_inode_number, const char *filename, uint32_t *out_inode_number);
-    int (*delete_file)(struct simplefs_filesystem *fs, uint32_t dir_inode_number, const char *filename);
+struct simplefs_filesystem
+{
+    const char *name; // Name of the filesystem
+
+    // Function pointers - removed first parameter since we use globals
+    int (*mount)(block_device_t *device);
+    int (*read_file)(uint32_t inode_number, uint8_t *buffer, uint32_t size, uint32_t offset);
+    int (*write_file)(uint32_t inode_number, const uint8_t *buffer, uint32_t size, uint32_t offset);
+    int (*list_dir)(uint32_t inode_number);
+    int (*find_file)(uint32_t dir_inode_number, const char *filename, uint32_t *out_inode_number);
+    int (*create_file)(uint32_t dir_inode_number, const char *filename, uint32_t *out_inode_number);
+    int (*delete_file)(uint32_t dir_inode_number, const char *filename);
 
     // Pointer to underlying block device
     block_device_t *device;
 
     // Pointer to the root node in VFS
-    struct vfs_node *root;
+    vfs_node_t *root;
 
     // Cached superblock
     simplefs_superblock_t superblock;
-} __attribute__((packed)) simplefs_filesystem_t;
+};
+
+// Global filesystem instance (extern for access from other files)
+extern simplefs_filesystem_t *simplefs_fs;
+extern vfs_node_t *simplefs_root;
 
 // Initialize SimpleFS
 void simplefs_init(block_device_t *block_device);
+
+// Format a block device with SimpleFS
+void simplefs_format(block_device_t *block_device, uint32_t total_blocks, int reserved_blocks);
+
 // Mount SimpleFS from a given device
 int simplefs_mount(block_device_t *block_device);
-// Read a file from SimpleFS
+
+// File operations
 int simplefs_read_file(uint32_t inode_number, uint8_t *buffer, uint32_t size, uint32_t offset);
-// List directory contents
-int simplefs_list_dir(uint32_t inode_number);
-// Find a file in a directory
-int simplefs_find_file(uint32_t dir_inode_number, const char *filename, uint32_t *out_inode_number);
-// Create a new file
-int simplefs_create_file(uint32_t dir_inode_number, const char *filename, uint32_t *out_inode_number);
-// Delete a file
-int simplefs_delete_file(uint32_t dir_inode_number, const char *filename);
-// Write data to a file
 int simplefs_write_file(uint32_t inode_number, const uint8_t *buffer, uint32_t size, uint32_t offset);
 
+// Directory operations
+int simplefs_list_dir(uint32_t inode_number);
+int simplefs_find_file(uint32_t dir_inode_number, const char *filename, uint32_t *out_inode_number);
+int simplefs_create_file(uint32_t dir_inode_number, const char *filename, uint32_t *out_inode_number);
+int simplefs_delete_file(uint32_t dir_inode_number, const char *filename);
+
+// Test function
 void kernel_test_filesystem(void);

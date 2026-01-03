@@ -6,42 +6,42 @@
 
 static vfs_node_t *vfs_root = NULL;
 
-// String helper functions
-static int strncmp(const char *s1, const char *s2, size_t n)
-{
-    while (n && *s1 && (*s1 == *s2))
-    {
-        s1++;
-        s2++;
-        n--;
-    }
-    if (n == 0)
-        return 0;
-    return *(unsigned char *)s1 - *(unsigned char *)s2;
-}
+// // String helper functions
+// static int strncmp(const char *s1, const char *s2, size_t n)
+// {
+//     while (n && *s1 && (*s1 == *s2))
+//     {
+//         s1++;
+//         s2++;
+//         n--;
+//     }
+//     if (n == 0)
+//         return 0;
+//     return *(unsigned char *)s1 - *(unsigned char *)s2;
+// }
 
-static void strcpy(char *dest, const char *src)
-{
-    while (*src)
-    {
-        *dest++ = *src++;
-    }
-    *dest = '\0';
-}
+// static void strcpy(char *dest, const char *src)
+// {
+//     while (*src)
+//     {
+//         *dest++ = *src++;
+//     }
+//     *dest = '\0';
+// }
 
-static char *strdup(const char *str)
-{
-    uint8_t len = strlen(str) + 1;
-    char *copy = (char *)kmalloc(len);
-    if (copy)
-    {
-        for (uint8_t i = 0; i < len; i++)
-        {
-            copy[i] = str[i];
-        }
-    }
-    return copy;
-}
+// static char *strdup(const char *str)
+// {
+//     uint8_t len = strlen(str) + 1;
+//     char *copy = (char *)kmalloc(len);
+//     if (copy)
+//     {
+//         for (uint8_t i = 0; i < len; i++)
+//         {
+//             copy[i] = str[i];
+//         }
+//     }
+//     return copy;
+// }
 
 void vfs_init(void)
 {
@@ -128,6 +128,108 @@ void vfs_close(vfs_node_t *node)
     {
         node->close(node);
     }
+}
+
+int vfs_create(const char *path, uint32_t flags)
+{
+    if (!path || path[0] != '/')
+        return -1;
+
+    // Find the last '/' to separate directory from filename
+    const char *last_slash = path;
+    const char *p = path;
+    while (*p)
+    {
+        if (*p == '/')
+            last_slash = p;
+        p++;
+    }
+
+    // If last_slash is at the start, parent is root
+    char parent_path[256];
+    const char *filename;
+
+    if (last_slash == path)
+    {
+        // Creating in root directory
+        parent_path[0] = '/';
+        parent_path[1] = '\0';
+        filename = path + 1;
+    }
+    else
+    {
+        // Copy parent path
+        int len = last_slash - path;
+        for (int i = 0; i < len && i < 255; i++)
+            parent_path[i] = path[i];
+        parent_path[len] = '\0';
+        filename = last_slash + 1;
+    }
+
+    // Resolve parent directory
+    vfs_node_t *parent = vfs_resolve_path(parent_path);
+    if (!parent)
+        return -1;
+
+    if (!(parent->flags & VFS_DIRECTORY))
+        return -1;
+
+    if (!parent->create)
+        return -1;
+
+    // Call parent's create function with filename and flags
+    return parent->create(parent, filename, flags);
+}
+
+int vfs_delete(const char *path)
+{
+    if (!path || path[0] != '/')
+        return -1;
+
+    // Find the last '/' to separate directory from filename
+    const char *last_slash = path;
+    const char *p = path;
+    while (*p)
+    {
+        if (*p == '/')
+            last_slash = p;
+        p++;
+    }
+
+    // Extract parent path and filename
+    char parent_path[256];
+    const char *filename;
+
+    if (last_slash == path)
+    {
+        // Deleting from root directory
+        parent_path[0] = '/';
+        parent_path[1] = '\0';
+        filename = path + 1;
+    }
+    else
+    {
+        // Copy parent path
+        int len = last_slash - path;
+        for (int i = 0; i < len && i < 255; i++)
+            parent_path[i] = path[i];
+        parent_path[len] = '\0';
+        filename = last_slash + 1;
+    }
+
+    // Resolve parent directory
+    vfs_node_t *parent = vfs_resolve_path(parent_path);
+    if (!parent)
+        return -1;
+
+    if (!(parent->flags & VFS_DIRECTORY))
+        return -1;
+
+    if (!parent->delete)
+        return -1;
+
+    // Call parent's delete function with filename
+    return parent->delete(parent, filename);
 }
 
 int vfs_read(vfs_node_t *node, uint32_t offset, uint32_t size, uint8_t *buffer)

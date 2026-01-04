@@ -1,4 +1,6 @@
 #include <memory/heap.h>
+#include <shell/shell.h>
+#include <stdint.h>
 #include <shell/print.h>
 
 // Simple block-based allocator with headers

@@ -4,7 +4,7 @@
 #include <disk/partition.h>
 #include <disk/partition_block_device.h>
 #include <memory/heap.h>
-#include <shell/print.h>
+#include <shell/shell.h>
 #include <utils/string.h>
 
 typedef struct

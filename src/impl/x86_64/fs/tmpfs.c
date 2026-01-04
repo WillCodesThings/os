@@ -1,6 +1,6 @@
 #include <fs/tmpfs.h>
 #include <fs/vfs.h>
-#include <shell/print.h>
+#include <shell/shell.h>
 
 #define MAX_FILES 256
 #define MAX_FILE_SIZE 4096

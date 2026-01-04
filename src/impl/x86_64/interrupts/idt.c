@@ -16,16 +16,16 @@ void idt_set_gate(int n, uint64_t handler)
     idt[n].zero = 0;
 }
 
-void idt_install()
+void idt_install(void)
 {
-    idt_reg.limit = sizeof(struct idt_entry) * IDT_ENTRIES - 1;
-    idt_reg.base = (uint64_t)&idt;
-
-    // Zero out the IDT
+    // Zero the IDT memory directly
     for (int i = 0; i < IDT_ENTRIES; i++)
     {
-        idt_set_gate(i, 0);
+        idt[i] = (struct idt_entry){0};
     }
+
+    idt_reg.limit = sizeof(struct idt_entry) * IDT_ENTRIES - 1;
+    idt_reg.base = (uint64_t)&idt;
 
     idt_load();
 }

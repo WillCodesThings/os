@@ -14,6 +14,6 @@ void kfree(void *ptr);
 
 void *krealloc(void *ptr, size_t new_size);
 
-void heap_status(uint32_t *total_size, uint32_t *used_size, uint32_t *free_size);
+void heap_stats(uint32_t *total_size, uint32_t *used_size, uint32_t *free_size);
 
 void heap_dump(void);

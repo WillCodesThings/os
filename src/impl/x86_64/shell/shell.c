@@ -1,5 +1,6 @@
-#include <stdint.h>
 #include <shell/shell.h>
+
+#include <stdint.h>
 #include <shell/print.h>
 #include <interrupts/io/keyboard.h>
 #include <graphics/graphics.h>
@@ -7,6 +8,8 @@
 #include <graphics/cursor.h>
 #include <fs/vfs.h>
 #include <fs/tmpfs.h>
+#include <interrupts/port_io.h>
+#include <memory/heap.h>
 
 // Constants
 #define MAX_COMMAND_LENGTH 64
@@ -391,7 +394,7 @@ static void cmd_ls(int argc, char **argv)
     uint32_t i = 0;
     vfs_node_t *child;
     int file_count = 0;
-    
+
     while (i < 64 && (child = vfs_readdir(dir, i)) != NULL)
     {
         print_str("  ");
@@ -401,12 +404,12 @@ static void cmd_ls(int argc, char **argv)
             print_str("[FILE] ");
         print_str(child->name);
         print_str("\n");
-        
+
         kfree(child);
         file_count++;
         i++;
     }
-    
+
     if (file_count == 0)
     {
         print_str("  (empty)\n");

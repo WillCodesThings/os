@@ -8,6 +8,10 @@ extern void default_interrupt_handler(void);
 // C handler for default interrupts
 void c_default_handler(int interrupt_num);
 
+void enable_interrupts(void);
+
+void disable_interrupts(void);
+
 // Debug function to print interrupt information
 void debug_print_interrupt(int interrupt_num);
 

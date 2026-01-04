@@ -2,7 +2,8 @@
 
 #include <stdint.h>
 
-typedef struct {
+typedef struct
+{
     uint8_t drive;
     uint8_t partition_index;
     uint32_t lba_start;
@@ -16,15 +17,15 @@ partition_info_t *partition_get(uint8_t drive, uint8_t partition_index);
 
 void partition_list(void);
 
-int partition_read(partition_info_t *partition, uint32_t sector, uint16_t *buffer);
-int partition_write(partition_info_t *partition, uint32_t sector, uint16_t *buffer);
+int partition_read(partition_info_t *partition, uint32_t sector, uint8_t *buffer);
+int partition_write(partition_info_t *partition, uint32_t sector, uint8_t *buffer);
 
 int partition_create_mbr(uint8_t drive, uint32_t total_sectors);
 
-int partition_create_mbr_custom(uint8_t drive, 
-                                 uint32_t part1_start, uint32_t part1_size,
-                                 uint32_t part2_start, uint32_t part2_size,
-                                 uint8_t part1_type, uint8_t part2_type);
+int partition_create_mbr_custom(uint8_t drive,
+                                uint32_t part1_start, uint32_t part1_size,
+                                uint32_t part2_start, uint32_t part2_size,
+                                uint8_t part1_type, uint8_t part2_type);
 
 int partition_auto_create(uint8_t drive);
 

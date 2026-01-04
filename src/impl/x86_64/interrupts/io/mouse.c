@@ -1,7 +1,7 @@
 #include <interrupts/io/mouse.h>
 #include <interrupts/idt.h>
 #include <interrupts/port_io.h>
-#include <shell/print.h>
+#include <shell/shell.h>
 
 // Forward declaration of assembly handler
 extern void mouse_interrupt_handler(void);

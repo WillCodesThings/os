@@ -1,6 +1,7 @@
 #include <interrupts/io/ata.h>
 #include <interrupts/idt.h>
 #include <interrupts/port_io.h>
+#include <shell/shell.h>
 #include <shell/print.h>
 
 // Forward declaration of assembly handler
@@ -32,7 +33,6 @@ static void ata_io_wait(ata_device_t *dev)
     inb(dev->io_base + ATA_REG_ALTSTATUS);
 }
 
-
 static int ata_wait_not_busy(ata_device_t *dev)
 {
     uint32_t timeout = 100000;
@@ -59,7 +59,6 @@ static int ata_wait_drq(ata_device_t *dev)
     return -1;
 }
 
-
 // Read status without clearing interrupt
 static uint8_t ata_read_altstatus(ata_device_t *dev)
 {
@@ -70,7 +69,7 @@ void ata_primary_handle_interrupt(void)
 {
     // acknowledge interrupt
     ata_primary.status = inb(ata_primary.io_base + ATA_REG_STATUS);
-    
+
     if (ata_primary.status & ATA_SR_ERR)
     {
         ata_primary.error = inb(ata_primary.io_base + ATA_REG_ERROR);
@@ -78,7 +77,7 @@ void ata_primary_handle_interrupt(void)
         serial_print_hex(ata_primary.error);
         serial_print("\n");
     }
-    
+
     // interrupt was received
     ata_primary.irq_invoked = 1;
 }
@@ -88,7 +87,7 @@ void ata_secondary_handle_interrupt(void)
 {
     // Read status to acknowledge interrupt
     ata_secondary.status = inb(ata_secondary.io_base + ATA_REG_STATUS);
-    
+
     // Check for errors
     if (ata_secondary.status & ATA_SR_ERR)
     {
@@ -97,7 +96,7 @@ void ata_secondary_handle_interrupt(void)
         serial_print_hex(ata_secondary.error);
         serial_print("\n");
     }
-    
+
     // Set flag to indicate interrupt was received
     ata_secondary.irq_invoked = 1;
 }
@@ -105,44 +104,46 @@ void ata_secondary_handle_interrupt(void)
 void ata_init(void)
 {
     serial_print("Initializing ATA controller...\n");
-    
+
     // Initialize primary bus
     ata_primary.io_base = ATA_PRIMARY_IO;
     ata_primary.control_base = ATA_PRIMARY_CONTROL;
     ata_primary.irq_number = ATA_PRIMARY_IRQ;
     ata_primary.irq_invoked = 0;
-    
+
     // Initialize secondary bus
     ata_secondary.io_base = ATA_SECONDARY_IO;
     ata_secondary.control_base = ATA_SECONDARY_CONTROL;
     ata_secondary.irq_number = ATA_SECONDARY_IRQ;
     ata_secondary.irq_invoked = 0;
-    
+
     // Disable interrupts during setup
     outb(ata_primary.control_base + ATA_REG_CONTROL, 0x02);
     outb(ata_secondary.control_base + ATA_REG_CONTROL, 0x02);
-    
+
     // Software reset for primary bus
     outb(ata_primary.control_base + ATA_REG_CONTROL, 0x04);
-    for (volatile int i = 0; i < 1000; i++); // delay
+    for (volatile int i = 0; i < 1000; i++)
+        ; // delay
     outb(ata_primary.control_base + ATA_REG_CONTROL, 0x00);
-    
+
     // Wait for primary to be ready
     ata_wait_ready(&ata_primary);
-    
+
     // Software reset for secondary bus
     outb(ata_secondary.control_base + ATA_REG_CONTROL, 0x04);
-    for (volatile int i = 0; i < 1000; i++); // delay
+    for (volatile int i = 0; i < 1000; i++)
+        ; // delay
     outb(ata_secondary.control_base + ATA_REG_CONTROL, 0x00);
-    
+
     // Wait for secondary to be ready
     ata_wait_ready(&ata_secondary);
-    
+
     // Register handlers
     serial_print("Registering ATA interrupt handlers\n");
-    idt_set_gate(0x2E, (uint64_t)ata_primary_interrupt_handler);      // IRQ 14 (Primary)
+    idt_set_gate(0x2E, (uint64_t)ata_primary_interrupt_handler);   // IRQ 14 (Primary)
     idt_set_gate(0x2F, (uint64_t)ata_secondary_interrupt_handler); // IRQ 15 (Secondary)
-    
+
     // Unmask IRQ14 and IRQ15
     // Unmask IRQ14 (primary ATA) and IRQ15 (secondary ATA)
     uint8_t master_mask = inb(0x21);
@@ -151,10 +152,9 @@ void ata_init(void)
     outb(0x21, master_mask);
 
     uint8_t follower_mask = inb(0xA1);
-    follower_mask &= ~(1 << 7);  // IRQ15
+    follower_mask &= ~(1 << 7); // IRQ15
     outb(0xA1, follower_mask);
 
-    
     serial_print("ATA controller initialized!\n");
 }
 
@@ -180,7 +180,7 @@ int ata_identify_device(uint8_t drive, uint16_t *identify)
     /* Read status */
     uint8_t status = inb(io + ATA_REG_STATUS);
     if (status == 0)
-        return -1;  // No device
+        return -1; // No device
 
     /* Wait for BSY clear and DRQ set */
     while (status & ATA_SR_BSY)
@@ -206,12 +206,11 @@ int ata_identify_device(uint8_t drive, uint16_t *identify)
     return 0;
 }
 
-
 // wait for interrupt w/o timout
 int ata_wait_irq(ata_device_t *dev)
 {
     uint32_t timeout = 1000000;
-    
+
     while (timeout--)
     {
         if (dev->irq_invoked)
@@ -220,12 +219,12 @@ int ata_wait_irq(ata_device_t *dev)
             return 0; // Success
         }
     }
-    
+
     serial_print("ATA IRQ timeout\n");
     return -1; // Timeout
 }
 
-int ata_read_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint16_t *buffer)
+int ata_read_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint8_t *buffer)
 {
     ata_device_t *dev = (drive < 2) ? &ata_primary : &ata_secondary;
     uint16_t io = dev->io_base;
@@ -252,7 +251,7 @@ int ata_read_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint16_t *buffe
     return 0;
 }
 
-int ata_write_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint16_t *buffer)
+int ata_write_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint8_t *buffer)
 {
     ata_device_t *dev = (drive < 2) ? &ata_primary : &ata_secondary;
     uint16_t io = dev->io_base;
@@ -284,12 +283,13 @@ int ata_write_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint16_t *buff
     return 0;
 }
 
-
-int ata_read_sector(uint8_t drive, uint32_t lba, uint16_t *buffer){
+int ata_read_sector(uint8_t drive, uint32_t lba, uint8_t *buffer)
+{
     return ata_read_sectors(drive, lba, 1, buffer);
 }
 
-int ata_write_sector(uint8_t drive, uint32_t lba, uint16_t *buffer){
+int ata_write_sector(uint8_t drive, uint32_t lba, uint8_t *buffer)
+{
     return ata_write_sectors(drive, lba, 1, buffer);
 }
 

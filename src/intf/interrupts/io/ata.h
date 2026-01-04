@@ -2,7 +2,8 @@
 #include <stdint.h>
 
 // ATA device structure
-typedef struct {
+typedef struct
+{
     volatile uint8_t irq_invoked;
     volatile uint8_t status;
     volatile uint8_t error;
@@ -61,17 +62,17 @@ typedef struct {
 
 // ATA drive types
 #define ATA_DRIVE_MASTER 0xE0
-#define ATA_DRIVE_SLAVE  0xF0
+#define ATA_DRIVE_SLAVE 0xF0
 
 // ATA functions
 void ata_init(void);
 int ata_identify_device(uint8_t drive, uint16_t *identify);
 
-int ata_read_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint16_t *buffer);
-int ata_write_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint16_t *buffer);
+int ata_read_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint8_t *buffer);
+int ata_write_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint8_t *buffer);
 
-int ata_read_sector(uint8_t drive, uint32_t lba, uint16_t *buffer);
-int ata_write_sector(uint8_t drive, uint32_t lba, uint16_t *buffer);
+int ata_read_sector(uint8_t drive, uint32_t lba, uint8_t *buffer);
+int ata_write_sector(uint8_t drive, uint32_t lba, uint8_t *buffer);
 
 uint8_t ata_get_status(uint8_t drive);
 uint8_t ata_get_error(uint8_t drive);

@@ -2,7 +2,7 @@
 #include <disk/block_device.h>
 #include <fs/vfs.h>
 #include <memory/heap.h>
-#include <shell/print.h>
+#include <shell/shell.h>
 #include <utils/string.h>
 
 simplefs_superblock_t simplefs_superblock;
@@ -397,15 +397,15 @@ int simplefs_delete_file(uint32_t dir_inode_number, const char *filename)
 void kernel_test_filesystem(void)
 {
     serial_print("\n=== Filesystem Test Suite ===\n\n");
-    
+
     // Test 1: List empty directory
     serial_print("[Test 1] Listing empty directory:\n");
     simplefs_list_dir(0);
     serial_print("\n");
-    
+
     // Test 2: Create some test files
     serial_print("[Test 2] Creating test files...\n");
-    
+
     const char *test_files[] = {
         "hello.txt",
         "readme.md",
@@ -416,15 +416,14 @@ void kernel_test_filesystem(void)
         "data.dat",
         "notes.txt",
         "system.cfg",
-        "temp.tmp"
-    };
-    
+        "temp.tmp"};
+
     uint32_t inode;
     for (int i = 0; i < 10; i++)
     {
         serial_print("  Creating: ");
         serial_print(test_files[i]);
-        
+
         int result = simplefs_create_file(0, test_files[i], &inode);
         if (result == 0)
         {
@@ -438,15 +437,15 @@ void kernel_test_filesystem(void)
         }
     }
     serial_print("\n");
-    
+
     // Test 3: List directory with files
     serial_print("[Test 3] Listing directory with files:\n");
     simplefs_list_dir(0);
     serial_print("\n");
-    
+
     // Test 4: Write data to files
     serial_print("[Test 4] Writing data to files...\n");
-    
+
     const char *test_data[] = {
         "Hello, World!",
         "This is a README file",
@@ -457,9 +456,8 @@ void kernel_test_filesystem(void)
         "Binary: 0xDEADBEEF",
         "Notes:\n- Item 1\n- Item 2",
         "System Config:\nVersion=1.0",
-        "Temporary data"
-    };
-    
+        "Temporary data"};
+
     for (int i = 0; i < 10; i++)
     {
         uint32_t file_inode;
@@ -470,10 +468,11 @@ void kernel_test_filesystem(void)
             serial_print(" (inode ");
             serial_print_hex(file_inode);
             serial_print("): ");
-            
+
             uint32_t len = 0;
-            while (test_data[i][len]) len++;
-            
+            while (test_data[i][len])
+                len++;
+
             int result = simplefs_write_file(file_inode, (const uint8_t *)test_data[i], len, 0);
             if (result >= 0)
             {
@@ -488,10 +487,10 @@ void kernel_test_filesystem(void)
         }
     }
     serial_print("\n");
-    
+
     // Test 5: Read data from files
     serial_print("[Test 5] Reading data from files...\n");
-    
+
     uint8_t read_buffer[256];
     for (int i = 0; i < 10; i++)
     {
@@ -501,9 +500,10 @@ void kernel_test_filesystem(void)
             serial_print("  Reading ");
             serial_print(test_files[i]);
             serial_print(": ");
-            
-            for (int j = 0; j < 256; j++) read_buffer[j] = 0;
-            
+
+            for (int j = 0; j < 256; j++)
+                read_buffer[j] = 0;
+
             int bytes_read = simplefs_read_file(file_inode, read_buffer, 256, 0);
             if (bytes_read > 0)
             {
@@ -526,17 +526,17 @@ void kernel_test_filesystem(void)
         }
     }
     serial_print("\n");
-    
+
     // Test 6: Find specific files
     serial_print("[Test 6] Finding specific files...\n");
-    
+
     const char *search_files[] = {"hello.txt", "nonexistent.txt", "kernel.bin"};
     for (int i = 0; i < 3; i++)
     {
         serial_print("  Looking for: ");
         serial_print(search_files[i]);
         serial_print(" - ");
-        
+
         uint32_t found_inode;
         if (simplefs_find_file(0, search_files[i], &found_inode) == 0)
         {
@@ -550,17 +550,17 @@ void kernel_test_filesystem(void)
         }
     }
     serial_print("\n");
-    
+
     // Test 7: Delete some files
     serial_print("[Test 7] Deleting files...\n");
-    
+
     const char *delete_files[] = {"temp.tmp", "test.log", "data.dat"};
     for (int i = 0; i < 3; i++)
     {
         serial_print("  Deleting: ");
         serial_print(delete_files[i]);
         serial_print(" - ");
-        
+
         if (simplefs_delete_file(0, delete_files[i]) == 0)
         {
             serial_print("OK\n");
@@ -571,12 +571,12 @@ void kernel_test_filesystem(void)
         }
     }
     serial_print("\n");
-    
+
     // Test 8: List directory after deletions
     serial_print("[Test 8] Listing directory after deletions:\n");
     simplefs_list_dir(0);
     serial_print("\n");
-    
+
     // Test 9: Verify deleted files are gone
     serial_print("[Test 9] Verifying deleted files...\n");
     for (int i = 0; i < 3; i++)
@@ -584,7 +584,7 @@ void kernel_test_filesystem(void)
         serial_print("  Checking: ");
         serial_print(delete_files[i]);
         serial_print(" - ");
-        
+
         uint32_t found_inode;
         if (simplefs_find_file(0, delete_files[i], &found_inode) == 0)
         {
@@ -596,7 +596,7 @@ void kernel_test_filesystem(void)
         }
     }
     serial_print("\n");
-    
+
     // Test 10: Heap statistics
     serial_print("[Test 10] Heap statistics:\n");
     uint32_t total, used, free;
@@ -617,7 +617,7 @@ void kernel_test_filesystem(void)
     serial_print_hex(free / 1024);
     serial_print(" KB)\n");
     serial_print("\n");
-    
+
     serial_print("=== Filesystem Test Complete ===\n\n");
 }
 

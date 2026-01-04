@@ -1,5 +1,6 @@
+#include <disk/test.h>
 #include <stdint.h>
-#include <shell/print.h>
+#include <shell/shell.h>
 #include <interrupts/io/ata.h>
 #include <interrupts/idt.h>
 #include <interrupts/port_io.h>
@@ -8,7 +9,7 @@ void ata_irq_test(void)
 {
     serial_print("\n=== ATA IRQ Test ===\n");
 
-    uint16_t buf[512] = {0};
+    uint8_t buf[512] = {0};
 
     // Try polling first (bypass interrupts)
     serial_print("Polling sector 0 on primary master...\n");

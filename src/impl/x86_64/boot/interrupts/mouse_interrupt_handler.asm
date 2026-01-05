@@ -33,7 +33,7 @@ mouse_interrupt_handler:
 
     ; Send End of Interrupt (EOI) to the PIC
     mov al, 0x20
-    out 0xA0, al ; slave PIC
+    out 0xA0, al ; follower PIC
     out 0x20, al ; master PIC
 
 

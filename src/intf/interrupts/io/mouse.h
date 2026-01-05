@@ -1,5 +1,4 @@
-#ifndef MOUSE_H
-#define MOUSE_H
+#pragma once 
 
 #include <stdint.h>
 
@@ -24,5 +23,3 @@ mouse_state_t mouse_get_state(void);
 #define MOUSE_LEFT_BUTTON 0x01
 #define MOUSE_RIGHT_BUTTON 0x02
 #define MOUSE_MIDDLE_BUTTON 0x04
-
-#endif

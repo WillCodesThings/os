@@ -1,32 +1,75 @@
-kernel_source_files := $(shell find src/impl/kernel -name *.c)
-kernel_object_files := $(patsubst src/impl/kernel/%.c, build/kernel/%.o, $(kernel_source_files))
+CC := x86_64-elf-gcc
+LD := x86_64-elf-ld
+AS := nasm
 
-x86_64_c_source_files := $(shell find src/impl/x86_64 -name *.c)
-x86_64_c_object_files := $(patsubst src/impl/x86_64/%.c, build/x86_64/%.o, $(x86_64_c_source_files))
+BUILD ?= debug
 
-x86_64_asm_source_files := $(shell find src/impl/x86_64 -name *.asm)
-x86_64_asm_object_files := $(patsubst src/impl/x86_64/%.asm, build/x86_64/%.o, $(x86_64_asm_source_files))
+SRC_KERNEL := src/impl/kernel
+SRC_ARCH   := src/impl/x86_64
 
-x86_64_object_files := $(x86_64_c_object_files) $(x86_64_asm_object_files)
+BUILD_DIR  := build
+DIST_DIR   := dist/x86_64
 
-$(kernel_object_files): build/kernel/%.o : src/impl/kernel/%.c
-	mkdir -p $(dir $@) && \
-	x86_64-elf-gcc -c -I src/intf -ffreestanding $(patsubst build/kernel/%.o, src/impl/kernel/%.c, $@) -o $@
+ISO_DIR    := targets/x86_64/iso
+LINKER     := targets/x86_64/linker.ld
 
-$(x86_64_c_object_files): build/x86_64/%.o : src/impl/x86_64/%.c
-	mkdir -p $(dir $@) && \
-	x86_64-elf-gcc -c -I src/intf -ffreestanding $(patsubst build/x86_64/%.o, src/impl/x86_64/%.c, $@) -o $@
+INCLUDES   := -I src/intf
 
-$(x86_64_asm_object_files): build/x86_64/%.o : src/impl/x86_64/%.asm
-	mkdir -p $(dir $@) && \
-	nasm -f elf64 $(patsubst build/x86_64/%.o, src/impl/x86_64/%.asm, $@) -o $@
+CFLAGS := -ffreestanding $(INCLUDES) \
+          -Wall -Wextra \
+          -Werror=implicit-function-declaration \
+          -Werror=incompatible-pointer-types \
+          -Werror=int-conversion \
+          -MMD -MP
 
-.PHONY: build-x86_64
-build-x86_64: $(kernel_object_files) $(x86_64_object_files)
-	mkdir -p dist/x86_64 && \
-	x86_64-elf-ld -n -o dist/x86_64/kernel.bin -T targets/x86_64/linker.ld $(kernel_object_files) $(x86_64_object_files) && \
-	cp dist/x86_64/kernel.bin targets/x86_64/iso/boot/kernel.bin && \
-	grub-mkrescue /usr/lib/grub/i386-pc -o dist/x86_64/kernel.iso targets/x86_64/iso
+ifeq ($(BUILD),debug)
+    CFLAGS += -O0 -g -DDEBUG
+else
+    CFLAGS += -O2
+endif
+
+KERNEL_C_SRC := $(shell find $(SRC_KERNEL) -name '*.c')
+ARCH_C_SRC   := $(shell find $(SRC_ARCH)   -name '*.c')
+ARCH_ASM_SRC := $(shell find $(SRC_ARCH)   -name '*.asm')
+
+KERNEL_OBJ := $(patsubst $(SRC_KERNEL)/%.c, $(BUILD_DIR)/kernel/%.o, $(KERNEL_C_SRC))
+ARCH_C_OBJ := $(patsubst $(SRC_ARCH)/%.c,   $(BUILD_DIR)/x86_64/%.o, $(ARCH_C_SRC))
+ARCH_ASM_OBJ := $(patsubst $(SRC_ARCH)/%.asm, $(BUILD_DIR)/x86_64/%.o, $(ARCH_ASM_SRC))
+
+OBJS := $(KERNEL_OBJ) $(ARCH_C_OBJ) $(ARCH_ASM_OBJ)
+
+
+.PHONY: all build-x86_64 clean check
+
+all: build-x86_64
+
+# --- Kernel C files ---
+$(BUILD_DIR)/kernel/%.o: $(SRC_KERNEL)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) -c $(CFLAGS) $< -o $@
+
+# --- Arch-specific C files ---
+$(BUILD_DIR)/x86_64/%.o: $(SRC_ARCH)/%.c
+	@mkdir -p $(dir $@)
+	$(CC) -c $(CFLAGS) $< -o $@
+
+# --- Assembly files ---
+$(BUILD_DIR)/x86_64/%.o: $(SRC_ARCH)/%.asm
+	@mkdir -p $(dir $@)
+	$(AS) -f elf64 $< -o $@
+
+build-x86_64: $(OBJS)
+	@mkdir -p $(DIST_DIR)
+	$(LD) -n -o $(DIST_DIR)/kernel.bin -T $(LINKER) $(OBJS)
+	cp $(DIST_DIR)/kernel.bin $(ISO_DIR)/boot/kernel.bin
+	grub-mkrescue /usr/lib/grub/i386-pc -o $(DIST_DIR)/kernel.iso $(ISO_DIR)
+
+check:
+	@echo "Checking for implicit declarations..."
+	@! grep -R "implicit declaration" $(BUILD_DIR) || false
 
 clean:
-	rm -rf build dist && rm -rf build/x86_64 && rm -rf build/kernel
+	rm -rf $(BUILD_DIR) dist
+
+-include $(KERNEL_OBJ:.o=.d)
+-include $(ARCH_C_OBJ:.o=.d)

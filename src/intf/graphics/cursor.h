@@ -1,5 +1,4 @@
-#ifndef CURSOR_H
-#define CURSOR_H
+#pragma once
 
 #include <stdint.h>
 
@@ -14,5 +13,3 @@ void cursor_hide(void);
 void set_cursor_color(uint32_t color);
 
 void cursor_show(void);
-
-#endif

@@ -18,13 +18,13 @@ void pic_remap(int offset1, int offset2)
     // Set vector offsets
     outb(PIC1_DATA, offset1); // Master PIC IRQ0-7
     io_wait();
-    outb(PIC2_DATA, offset2); // Slave PIC IRQ8-15
+    outb(PIC2_DATA, offset2); // follower PIC IRQ8-15
     io_wait();
 
     // Setup cascade
-    outb(PIC1_DATA, 4); // Tell Master PIC there’s a slave at IRQ2
+    outb(PIC1_DATA, 4); // Tell Master PIC there’s a follower at IRQ2
     io_wait();
-    outb(PIC2_DATA, 2); // Tell Slave PIC its cascade identity
+    outb(PIC2_DATA, 2); // Tell follower PIC its cascade identity
     io_wait();
 
     // Set 8086/88 mode

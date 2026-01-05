@@ -5,7 +5,11 @@
 
 // Simple block-based allocator with headers
 
-#define HEAP_START 0x100000 // Start at 1MB
+// Symbol exported by linker script - marks end of kernel
+extern char _kernel_end;
+
+// Heap starts after kernel, aligned to 4KB page boundary
+#define HEAP_START (((uintptr_t)&_kernel_end + 0xFFF) & ~0xFFF)
 #define HEAP_SIZE 0x2000000 // 32MB heap
 #define HEAP_MAGIC 0xDEADBEEF
 
@@ -39,10 +43,10 @@ void heap_init(void)
     total_size = HEAP_SIZE;
     used_size = 0;
 
-    serial_print("Heap initialized at 0x");
-    print_hex((uint64_t)HEAP_START);
+    serial_print("Heap initialized at ");
+    serial_print_hex((uint64_t)HEAP_START);
     serial_print(" (");
-    print_int(HEAP_SIZE / 1024);
+    serial_print_dec(HEAP_SIZE / 1024);
     serial_print(" KB)\n");
 }
 

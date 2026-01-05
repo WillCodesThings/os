@@ -178,6 +178,12 @@ void print_int(int num)
     int is_negative = (num < 0);
     if (is_negative)
     {
+        // Handle INT_MIN edge case
+        if (num == -2147483648)
+        {
+            print_str("-2147483648");
+            return;
+        }
         num = -num;
     }
 
@@ -191,6 +197,21 @@ void print_int(int num)
     {
         *--ptr = '-';
     }
+
+    print_str(ptr);
+}
+
+void print_uint(uint32_t num)
+{
+    char buffer[12];
+    char *ptr = &buffer[11];
+    *ptr = '\0';
+
+    do
+    {
+        *--ptr = (num % 10) + '0';
+        num /= 10;
+    } while (num);
 
     print_str(ptr);
 }

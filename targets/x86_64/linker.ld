@@ -13,4 +13,26 @@ SECTIONS
     {
         *(.text)
     }
+
+    .rodata :
+    {
+        *(.rodata)
+        *(.rodata.*)
+    }
+
+    .data :
+    {
+        *(.data)
+        *(.data.*)
+    }
+
+    .bss :
+    {
+        *(COMMON)
+        *(.bss)
+        *(.bss.*)
+    }
+
+    /* Export kernel end address for heap to use */
+    _kernel_end = .;
 }

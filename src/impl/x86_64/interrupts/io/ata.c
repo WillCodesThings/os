@@ -27,10 +27,10 @@ static void ata_wait_ready(ata_device_t *dev)
 
 static void ata_io_wait(ata_device_t *dev)
 {
-    inb(dev->io_base + ATA_REG_ALTSTATUS);
-    inb(dev->io_base + ATA_REG_ALTSTATUS);
-    inb(dev->io_base + ATA_REG_ALTSTATUS);
-    inb(dev->io_base + ATA_REG_ALTSTATUS);
+    inb(dev->control_base + ATA_REG_ALTSTATUS);
+    inb(dev->control_base + ATA_REG_ALTSTATUS);
+    inb(dev->control_base + ATA_REG_ALTSTATUS);
+    inb(dev->control_base + ATA_REG_ALTSTATUS);
 }
 
 static int ata_wait_not_busy(ata_device_t *dev)
@@ -144,15 +144,15 @@ void ata_init(void)
     idt_set_gate(0x2E, (uint64_t)ata_primary_interrupt_handler);   // IRQ 14 (Primary)
     idt_set_gate(0x2F, (uint64_t)ata_secondary_interrupt_handler); // IRQ 15 (Secondary)
 
-    // Unmask IRQ14 and IRQ15
-    // Unmask IRQ14 (primary ATA) and IRQ15 (secondary ATA)
+    // Unmask IRQ14 and IRQ15 (both are on the slave PIC)
+    // IRQ14 = bit 6 on slave, IRQ15 = bit 7 on slave
     uint8_t master_mask = inb(0x21);
-    master_mask &= ~(1 << 6); // IRQ14
-    master_mask &= ~(1 << 2); // cascade to follower
+    master_mask &= ~(1 << 2); // unmask cascade to slave (IRQ2)
     outb(0x21, master_mask);
 
     uint8_t follower_mask = inb(0xA1);
-    follower_mask &= ~(1 << 7); // IRQ15
+    follower_mask &= ~(1 << 6); // IRQ14 (primary ATA)
+    follower_mask &= ~(1 << 7); // IRQ15 (secondary ATA)
     outb(0xA1, follower_mask);
 
     serial_print("ATA controller initialized!\n");
@@ -229,10 +229,19 @@ int ata_read_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint8_t *buffer
     ata_device_t *dev = (drive < 2) ? &ata_primary : &ata_secondary;
     uint16_t io = dev->io_base;
 
+    // Check initial status
+    uint8_t status = inb(io + ATA_REG_STATUS);
+    if (status == 0xFF)
+    {
+        // Floating bus - no drive present
+        return -1;
+    }
+
     if (ata_wait_not_busy(dev) != 0)
         return -1;
 
     outb(io + ATA_REG_DRIVE, 0xE0 | ((drive & 1) << 4) | ((lba >> 24) & 0x0F));
+    ata_io_wait(dev); // Give drive time to respond to drive select
     outb(io + ATA_REG_SECCOUNT, count);
     outb(io + ATA_REG_LBA_LOW, (uint8_t)lba);
     outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
@@ -244,8 +253,9 @@ int ata_read_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint8_t *buffer
         if (ata_wait_drq(dev) != 0)
             return -1;
 
+        uint16_t *buf16 = (uint16_t *)(buffer + s * 512);
         for (int i = 0; i < 256; i++)
-            buffer[s * 256 + i] = inw(io + ATA_REG_DATA);
+            buf16[i] = inw(io + ATA_REG_DATA);
     }
 
     return 0;
@@ -260,6 +270,7 @@ int ata_write_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint8_t *buffe
         return -1;
 
     outb(io + ATA_REG_DRIVE, 0xE0 | ((drive & 1) << 4) | ((lba >> 24) & 0x0F));
+    ata_io_wait(dev);
     outb(io + ATA_REG_SECCOUNT, count);
     outb(io + ATA_REG_LBA_LOW, (uint8_t)lba);
     outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
@@ -268,15 +279,23 @@ int ata_write_sectors(uint8_t drive, uint32_t lba, uint8_t count, uint8_t *buffe
 
     for (uint8_t s = 0; s < count; s++)
     {
+        ata_io_wait(dev);
         if (ata_wait_drq(dev) != 0)
             return -1;
 
+        uint16_t *buf16 = (uint16_t *)(buffer + s * 512);
         for (int i = 0; i < 256; i++)
-            outw(io + ATA_REG_DATA, buffer[s * 256 + i]);
+            outw(io + ATA_REG_DATA, buf16[i]);
+
+        ata_io_wait(dev);
+        /* Wait for drive to finish processing this sector */
+        if (ata_wait_not_busy(dev) != 0)
+            return -1;
     }
 
     /* Flush write cache */
     outb(io + ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
+    ata_io_wait(dev);
     if (ata_wait_not_busy(dev) != 0)
         return -1;
 

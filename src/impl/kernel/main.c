@@ -35,6 +35,9 @@ void kernel_main(void)
 
     kernel_filesystem_init();
 
+    // Create sample files for testing
+    simplefs_create_sample_files();
+
     enable_interrupts();
 
     // Initialize graphics
@@ -42,14 +45,6 @@ void kernel_main(void)
     print_init();
     cursor_init();
     cursor_show();
-
-    uint32_t total, used, free;
-    heap_stats(&total, &used, &free);
-    serial_print("Heap before shell: used=");
-    serial_print_hex(used);
-    serial_print(", free=");
-    serial_print_hex(free);
-    serial_print("\n");
 
     // Draw a welcome screen
     uint32_t cx = get_screen_width() / 2;

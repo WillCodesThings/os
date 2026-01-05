@@ -26,9 +26,11 @@ ata_primary_interrupt_handler:
     ; Call the C-level handler for primary bus
     call ata_primary_handle_interrupt
 
-    ; Send End of Interrupt (EOI) to master PIC
+    ; Send End of Interrupt (EOI) to both PICs (IRQ14 is on slave)
     mov al, 0x20
-    out 0x20, al
+    out 0xA0, al   ; slave PIC first
+    mov al, 0x20
+    out 0x20, al   ; then master PIC
 
     ; Restore all general-purpose registers
     pop r15

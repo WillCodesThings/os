@@ -186,7 +186,8 @@ int partition_read(partition_info_t *partition, uint32_t sector, uint8_t *buffer
         return -1;
     }
 
-    return ata_read_sector(partition->drive, absolute_lba, buffer);
+    int result = ata_read_sector(partition->drive, absolute_lba, buffer);
+    return result;
 }
 
 int partition_write(partition_info_t *partition, uint32_t sector, uint8_t *buffer)

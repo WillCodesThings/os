@@ -12,14 +12,14 @@
 #include <memory/heap.h>
 
 // Constants
-#define MAX_COMMAND_LENGTH 64
-#define MAX_COMMANDS 9
-#define MAX_ARGS 10
+#define MAX_COMMAND_LENGTH 256
+#define MAX_COMMANDS 16
+#define MAX_ARGS 16
 #define PROMPT "> "
 
 // Command buffer
 static char command_buffer[MAX_COMMAND_LENGTH];
-static uint8_t buffer_pos = 0;
+static uint16_t buffer_pos = 0;
 
 // Argument parsing
 static char *args[MAX_ARGS];
@@ -46,6 +46,10 @@ static void cmd_cls(int argc, char **argv);
 static void cmd_ls(int argc, char **argv);
 static void cmd_cat(int argc, char **argv);
 static void cmd_heap(int argc, char **argv);
+static void cmd_touch(int argc, char **argv);
+static void cmd_rm(int argc, char **argv);
+static void cmd_write(int argc, char **argv);
+static void cmd_echo(int argc, char **argv);
 
 // Command table
 static const command_t commands[MAX_COMMANDS] = {
@@ -58,6 +62,10 @@ static const command_t commands[MAX_COMMANDS] = {
     {"ls", "List directory contents", cmd_ls},
     {"cat", "Display file contents", cmd_cat},
     {"heap", "Show heap statistics", cmd_heap},
+    {"touch", "Create a new file", cmd_touch},
+    {"rm", "Remove a file", cmd_rm},
+    {"write", "Write text to a file", cmd_write},
+    {"echo", "Print text to the screen", cmd_echo},
     {NULL, NULL, NULL} // Sentinel
 };
 
@@ -135,8 +143,13 @@ static void execute_command(void)
     }
 
     // First argument is the command name
-    for (int i = 0; i < MAX_COMMANDS && commands[i].name != NULL; i++)
+    for (int i = 0; i < MAX_COMMANDS; i++)
     {
+        if (commands[i].name == NULL)
+        {
+            break;
+        }
+
         if (strcmp(args[0], commands[i].name) == 0)
         {
             commands[i].function(arg_count, args);
@@ -210,24 +223,30 @@ static void cmd_cls(int argc, char **argv)
 
 static void cmd_heap(int argc, char **argv)
 {
-    uint32_t total, used, free;
-    heap_stats(&total, &used, &free);
+    uint32_t total, used, free_mem;
+    heap_stats(&total, &used, &free_mem);
+
+    if (total == 0)
+    {
+        print_str("Heap not initialized\n");
+        return;
+    }
 
     print_str("Heap Statistics:\n");
     print_str("  Total: ");
-    print_int(total / 1024);
+    print_uint(total / 1024);
     print_str(" KB\n");
 
     print_str("  Used:  ");
-    print_int(used / 1024);
+    print_uint(used / 1024);
     print_str(" KB (");
-    print_int((used * 100) / total);
+    print_uint((used * 100) / total);
     print_str("%)\n");
 
     print_str("  Free:  ");
-    print_int(free / 1024);
+    print_uint(free_mem / 1024);
     print_str(" KB (");
-    print_int((free * 100) / total);
+    print_uint((free_mem * 100) / total);
     print_str("%)\n");
 }
 
@@ -474,6 +493,164 @@ static void cmd_reboot(int argc, char **argv)
     outb(0x64, 0xFE);
 }
 
+static void cmd_touch(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        print_str("Usage: touch <filename>\n");
+        return;
+    }
+
+    vfs_node_t *root = vfs_get_root();
+    if (!root)
+    {
+        print_str("Error: No filesystem mounted\n");
+        return;
+    }
+
+    // Check if file already exists
+    vfs_node_t *existing = vfs_finddir(root, argv[1]);
+    if (existing)
+    {
+        print_str("File already exists: ");
+        print_str(argv[1]);
+        print_str("\n");
+        kfree(existing);
+        return;
+    }
+
+    // Create the file
+    if (root->create)
+    {
+        int result = root->create(root, argv[1], VFS_FILE);
+        if (result == 0)
+        {
+            print_str("Created: ");
+            print_str(argv[1]);
+            print_str("\n");
+        }
+        else
+        {
+            print_str("Error creating file\n");
+        }
+    }
+    else
+    {
+        print_str("Error: Filesystem does not support file creation\n");
+    }
+}
+
+static void cmd_rm(int argc, char **argv)
+{
+    if (argc < 2)
+    {
+        print_str("Usage: rm <filename>\n");
+        return;
+    }
+
+    vfs_node_t *root = vfs_get_root();
+    if (!root)
+    {
+        print_str("Error: No filesystem mounted\n");
+        return;
+    }
+
+    // Check if file exists
+    vfs_node_t *existing = vfs_finddir(root, argv[1]);
+    if (!existing)
+    {
+        print_str("File not found: ");
+        print_str(argv[1]);
+        print_str("\n");
+        return;
+    }
+    kfree(existing);
+
+    // Delete the file
+    if (root->delete)
+    {
+        int result = root->delete(root, argv[1]);
+        if (result == 0)
+        {
+            print_str("Removed: ");
+            print_str(argv[1]);
+            print_str("\n");
+        }
+        else
+        {
+            print_str("Error removing file\n");
+        }
+    }
+    else
+    {
+        print_str("Error: Filesystem does not support file deletion\n");
+    }
+}
+
+static void cmd_write(int argc, char **argv)
+{
+    if (argc < 3)
+    {
+        print_str("Usage: write <filename> <text...>\n");
+        return;
+    }
+
+    vfs_node_t *file = vfs_open(argv[1], VFS_WRITE);
+    if (!file)
+    {
+        print_str("File not found: ");
+        print_str(argv[1]);
+        print_str("\nTip: Use 'touch' to create a file first\n");
+        return;
+    }
+
+    // Concatenate all remaining arguments as the content
+    char content[512];
+    int pos = 0;
+    for (int i = 2; i < argc && pos < 500; i++)
+    {
+        char *arg = argv[i];
+        while (*arg && pos < 500)
+        {
+            content[pos++] = *arg++;
+        }
+        if (i < argc - 1 && pos < 500)
+        {
+            content[pos++] = ' ';
+        }
+    }
+    content[pos] = '\0';
+
+    int bytes = vfs_write(file, 0, pos, (uint8_t *)content);
+    vfs_close(file);
+
+    if (bytes > 0)
+    {
+        print_str("Wrote ");
+        print_int(bytes);
+        print_str(" bytes to ");
+        print_str(argv[1]);
+        print_str("\n");
+    }
+    else
+    {
+        print_str("Error writing to file\n");
+    }
+}
+
+static void cmd_echo(int argc, char **argv)
+{
+    for (int i = 1; i < argc; i++)
+    {
+        print_str(argv[i]);
+        if (i < argc - 1)
+        {
+            print_str(" ");
+        }
+    }
+    print_str("\n");
+}
+
 // Initialize the shell
 void shell_init(void)
 {
@@ -489,8 +666,6 @@ void shell_process_char(char c)
     {
         // Execute the command on Enter
         print_str("\n");
-        serial_print(command_buffer);
-        serial_print("\n");
         execute_command();
         reset_command_buffer();
         print_str(PROMPT);

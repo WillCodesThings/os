@@ -15,25 +15,7 @@ static int partition_block_read(struct block_device *dev, uint32_t block_num, ui
         return -1;
 
     partition_block_device_t *part_dev = (partition_block_device_t *)dev;
-
-    uint64_t lba =
-        (uint64_t)part_dev->partition->lba_start;
-
-    serial_print("DEBUG: partition_block_read - block_num=");
-    serial_print_hex(block_num);
-    serial_print(", partition start=");
-    serial_print_hex(lba);
-    serial_print(", absolute LBA=");
-    serial_print_hex(lba + (uint64_t)block_num);
-    serial_print("\n");
-
-    int result = partition_read(part_dev->partition, block_num, buffer);
-
-    serial_print("DEBUG: partition_read returned ");
-    serial_print_hex(result);
-    serial_print("\n");
-
-    return result;
+    return partition_read(part_dev->partition, block_num, buffer);
 }
 
 static int partition_block_write(struct block_device *dev, uint32_t block_num, uint8_t *buffer)
@@ -42,22 +24,7 @@ static int partition_block_write(struct block_device *dev, uint32_t block_num, u
         return -1;
 
     partition_block_device_t *part_dev = (partition_block_device_t *)dev;
-
-    serial_print("DEBUG: partition_block_write - block_num=");
-    serial_print_hex(block_num);
-    serial_print(", partition start=");
-    serial_print_hex(part_dev->partition->lba_start);
-    serial_print(", absolute LBA=");
-    serial_print_hex(part_dev->partition->lba_start + block_num);
-    serial_print("\n");
-
-    int result = partition_write(part_dev->partition, block_num, buffer);
-
-    serial_print("DEBUG: partition_write returned ");
-    serial_print_hex(result);
-    serial_print("\n");
-
-    return result;
+    return partition_write(part_dev->partition, block_num, buffer);
 }
 
 block_device_t *partition_create_block_device(partition_info_t *partition)

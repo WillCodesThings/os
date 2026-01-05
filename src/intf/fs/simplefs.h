@@ -111,5 +111,6 @@ int simplefs_find_file(uint32_t dir_inode_number, const char *filename, uint32_t
 int simplefs_create_file(uint32_t dir_inode_number, const char *filename, uint32_t *out_inode_number);
 int simplefs_delete_file(uint32_t dir_inode_number, const char *filename);
 
-// Test function
+// Test functions
 void kernel_test_filesystem(void);
+void simplefs_create_sample_files(void);

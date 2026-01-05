@@ -10,10 +10,18 @@
 #include <fs/tmpfs.h>
 #include <interrupts/port_io.h>
 #include <memory/heap.h>
+#include <drivers/pci.h>
+#include <drivers/e1000.h>
+#include <net/net.h>
+#include <net/socket.h>
+#include <gui/window.h>
+#include <gui/bmp.h>
+#include <gui/imageviewer.h>
+#include <exec/process.h>
 
 // Constants
 #define MAX_COMMAND_LENGTH 256
-#define MAX_COMMANDS 16
+#define MAX_COMMANDS 32
 #define MAX_ARGS 16
 #define PROMPT "> "
 
@@ -50,6 +58,13 @@ static void cmd_touch(int argc, char **argv);
 static void cmd_rm(int argc, char **argv);
 static void cmd_write(int argc, char **argv);
 static void cmd_echo(int argc, char **argv);
+static void cmd_ping(int argc, char **argv);
+static void cmd_ifconfig(int argc, char **argv);
+static void cmd_pci(int argc, char **argv);
+static void cmd_netstat(int argc, char **argv);
+static void cmd_wget(int argc, char **argv);
+static void cmd_view(int argc, char **argv);
+static void cmd_run(int argc, char **argv);
 
 // Command table
 static const command_t commands[MAX_COMMANDS] = {
@@ -66,6 +81,13 @@ static const command_t commands[MAX_COMMANDS] = {
     {"rm", "Remove a file", cmd_rm},
     {"write", "Write text to a file", cmd_write},
     {"echo", "Print text to the screen", cmd_echo},
+    {"ping", "Ping an IP address (ping <ip>)", cmd_ping},
+    {"ifconfig", "Show/set network config (ifconfig [ip] [gateway])", cmd_ifconfig},
+    {"pci", "List PCI devices", cmd_pci},
+    {"netstat", "Show network status", cmd_netstat},
+    {"wget", "Fetch URL content (wget <ip> <port> <path>)", cmd_wget},
+    {"view", "Open image viewer (view <file.bmp>)", cmd_view},
+    {"run", "Run an ELF binary (run <file>)", cmd_run},
     {NULL, NULL, NULL} // Sentinel
 };
 
@@ -651,6 +673,384 @@ static void cmd_echo(int argc, char **argv)
     print_str("\n");
 }
 
+// Helper to parse IP address like "10.0.2.2" -> uint32_t
+// Returns 0 if invalid (not a valid IP format)
+static uint32_t parse_ip(const char *str) {
+    if (!str || !*str) return 0;
+
+    uint8_t octets[4] = {0};
+    int octet_idx = 0;
+    int value = 0;
+    int has_digit = 0;
+
+    while (*str) {
+        if (*str >= '0' && *str <= '9') {
+            value = value * 10 + (*str - '0');
+            has_digit = 1;
+            if (value > 255) return 0;  // Invalid octet
+        } else if (*str == '.') {
+            if (!has_digit || octet_idx >= 3) return 0;  // Invalid format
+            octets[octet_idx++] = value;
+            value = 0;
+            has_digit = 0;
+        } else {
+            // Invalid character (not a digit or dot) - likely a hostname
+            return 0;
+        }
+        str++;
+    }
+
+    // Store last octet
+    if (!has_digit || octet_idx != 3) return 0;  // Need exactly 4 octets
+    octets[octet_idx] = value;
+
+    return ip_to_uint32(octets[0], octets[1], octets[2], octets[3]);
+}
+
+static void cmd_ping(int argc, char **argv)
+{
+    if (argc < 2) {
+        print_str("Usage: ping <ip address>\n");
+        print_str("Example: ping 10.0.2.2\n");
+        return;
+    }
+
+    uint32_t ip = parse_ip(argv[1]);
+    if (ip == 0) {
+        print_str("Error: Invalid IP address '");
+        print_str(argv[1]);
+        print_str("'\n");
+        print_str("DNS is not supported. Use IP address (e.g., 10.0.2.2)\n");
+        return;
+    }
+
+    print_str("Pinging ");
+    print_str(argv[1]);
+    print_str("...\n");
+
+    int replies = ping(ip, 4);
+    print_str("Received ");
+    print_int(replies);
+    print_str(" of 4 replies\n");
+}
+
+static void cmd_ifconfig(int argc, char **argv)
+{
+    // If arguments provided, set IP and/or gateway
+    if (argc >= 2) {
+        uint32_t new_ip = parse_ip(argv[1]);
+        if (new_ip == 0) {
+            print_str("Error: Invalid IP address '");
+            print_str(argv[1]);
+            print_str("'\n");
+            return;
+        }
+        net_set_ip(new_ip);
+        print_str("IP address set to ");
+        print_str(argv[1]);
+        print_str("\n");
+
+        if (argc >= 3) {
+            uint32_t new_gw = parse_ip(argv[2]);
+            if (new_gw == 0) {
+                print_str("Error: Invalid gateway address '");
+                print_str(argv[2]);
+                print_str("'\n");
+                return;
+            }
+            net_set_gateway(new_gw);
+            print_str("Gateway set to ");
+            print_str(argv[2]);
+            print_str("\n");
+        }
+        return;
+    }
+
+    // Show current configuration
+    uint8_t mac[6];
+    e1000_get_mac_address(mac);
+
+    print_str("Network Configuration:\n");
+    print_str("  MAC Address: ");
+    for (int i = 0; i < 6; i++) {
+        if (mac[i] < 16) print_str("0");
+        print_hex(mac[i]);
+        if (i < 5) print_str(":");
+    }
+    print_str("\n");
+
+    uint32_t ip = net_get_ip();
+    uint8_t ip_bytes[4];
+    uint32_to_ip(ip, ip_bytes);
+    print_str("  IP Address:  ");
+    print_int(ip_bytes[0]); print_str(".");
+    print_int(ip_bytes[1]); print_str(".");
+    print_int(ip_bytes[2]); print_str(".");
+    print_int(ip_bytes[3]); print_str("\n");
+
+    uint32_t gw = net_get_gateway();
+    uint32_to_ip(gw, ip_bytes);
+    print_str("  Gateway:     ");
+    print_int(ip_bytes[0]); print_str(".");
+    print_int(ip_bytes[1]); print_str(".");
+    print_int(ip_bytes[2]); print_str(".");
+    print_int(ip_bytes[3]); print_str("\n");
+
+    print_str("  Link Status: ");
+    print_str(e1000_link_up() ? "UP\n" : "DOWN\n");
+
+    print_str("\nUsage: ifconfig [ip] [gateway]\n");
+    print_str("  Example: ifconfig 192.168.1.100 192.168.1.1\n");
+}
+
+static void cmd_pci(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    int count = pci_get_device_count();
+    print_str("PCI Devices (");
+    print_int(count);
+    print_str(" found):\n");
+
+    for (int i = 0; i < count; i++) {
+        pci_device_t *dev = pci_get_device(i);
+        if (!dev) continue;
+
+        print_str("  ");
+        print_int(dev->bus);
+        print_str(":");
+        print_int(dev->device);
+        print_str(".");
+        print_int(dev->function);
+        print_str(" - Vendor: 0x");
+        print_hex(dev->vendor_id);
+        print_str(" Device: 0x");
+        print_hex(dev->device_id);
+        print_str(" Class: ");
+        print_hex(dev->class_code);
+        print_str(":");
+        print_hex(dev->subclass);
+        print_str("\n");
+    }
+}
+
+static void cmd_netstat(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    print_str("Network Status:\n");
+
+    // Show MMIO base address
+    uint64_t mmio = e1000_get_mmio_base();
+    print_str("  MMIO Base: 0x");
+    // Print high 32 bits if non-zero
+    if (mmio >> 32) {
+        print_hex((mmio >> 32) & 0xFFFFFFFF);
+    }
+    print_hex(mmio & 0xFFFFFFFF);
+    print_str("\n");
+
+    // Show status register
+    uint32_t status = e1000_get_status();
+    print_str("  Status Reg: 0x");
+    print_hex(status);
+    print_str("\n");
+
+    print_str("  Link: ");
+    if (status & 0x02) {
+        print_str("UP");
+    } else {
+        print_str("DOWN");
+    }
+    print_str(", Speed: ");
+    uint32_t speed = (status >> 6) & 0x03;
+    if (speed == 0) print_str("10 Mbps");
+    else if (speed == 1) print_str("100 Mbps");
+    else print_str("1000 Mbps");
+    print_str("\n");
+
+    // Show TX debug info
+    e1000_debug_tx();
+
+    // Process any pending packets
+    print_str("Processing packets...\n");
+    for (int i = 0; i < 10; i++) {
+        net_process_packet();
+    }
+    print_str("Done.\n");
+}
+
+static void cmd_wget(int argc, char **argv)
+{
+    if (argc < 4) {
+        print_str("Usage: wget <ip> <port> <path> [output_file]\n");
+        print_str("Example: wget 192.168.1.100 80 /image.bmp /tmp/image.bmp\n");
+        return;
+    }
+
+    uint32_t ip = parse_ip(argv[1]);
+    if (ip == 0) {
+        print_str("Error: Invalid IP address '");
+        print_str(argv[1]);
+        print_str("'\n");
+        return;
+    }
+
+    int port = 0;
+    const char *p = argv[2];
+    while (*p >= '0' && *p <= '9') {
+        port = port * 10 + (*p - '0');
+        p++;
+    }
+    if (port <= 0 || port > 65535) {
+        print_str("Error: Invalid port number\n");
+        return;
+    }
+
+    print_str("Connecting to ");
+    print_str(argv[1]);
+    print_str(":");
+    print_int(port);
+    print_str(argv[3]);
+    print_str("...\n");
+
+    // Use larger buffer for binary files (512KB max to be safe)
+    #define WGET_BUFFER_SIZE (512 * 1024)
+    uint8_t *response = (uint8_t *)kmalloc(WGET_BUFFER_SIZE);
+    if (!response) {
+        print_str("Error: Out of memory\n");
+        return;
+    }
+
+    int len = http_get(argv[1], (uint16_t)port, argv[3], (char *)response, WGET_BUFFER_SIZE);
+
+    if (len > 0) {
+        // Find end of HTTP headers (\r\n\r\n)
+        uint8_t *body = response;
+        int body_len = len;
+        for (int i = 0; i < len - 3; i++) {
+            if (response[i] == '\r' && response[i+1] == '\n' &&
+                response[i+2] == '\r' && response[i+3] == '\n') {
+                body = response + i + 4;
+                body_len = len - (i + 4);
+                break;
+            }
+        }
+
+        print_str("Received ");
+        print_int(body_len);
+        print_str(" bytes\n");
+
+        // If output file specified, save it
+        if (argc >= 5) {
+            // Use body (without headers) for saving
+            uint8_t *save_data = body;
+            int save_len = body_len;
+            // Get filename from path (skip leading /)
+            const char *filename = argv[4];
+            if (filename[0] == '/') filename++;
+
+            vfs_node_t *root = vfs_get_root();
+            if (!root) {
+                print_str("Error: No filesystem\n");
+            } else {
+                // Create file if it doesn't exist
+                vfs_node_t *file = vfs_finddir(root, filename);
+                if (!file && root->create) {
+                    root->create(root, filename, VFS_FILE);
+                    file = vfs_finddir(root, filename);
+                }
+
+                if (file) {
+                    vfs_write(file, 0, save_len, save_data);
+                    vfs_close(file);
+                    print_str("Saved to ");
+                    print_str(argv[4]);
+                    print_str("\n");
+                    kfree(file);
+                } else {
+                    print_str("Error: Could not create file\n");
+                }
+            }
+        } else {
+            // Print first 500 chars for text
+            for (int i = 0; i < len && i < 500; i++) {
+                if (response[i] >= 32 && response[i] < 127) {
+                    print_char(response[i]);
+                } else if (response[i] == '\n' || response[i] == '\r') {
+                    print_char(response[i]);
+                }
+            }
+            if (len > 500) {
+                print_str("\n... (truncated)\n");
+            }
+        }
+    } else {
+        print_str("Failed to fetch URL (error ");
+        print_int(len);
+        print_str(")\n");
+    }
+
+    kfree(response);
+}
+
+static void cmd_view(int argc, char **argv)
+{
+    if (argc < 2) {
+        print_str("Usage: view <image.bmp>\n");
+        return;
+    }
+
+    print_str("Opening image: ");
+    print_str(argv[1]);
+    print_str("\n");
+
+    print_str("Creating viewer window...\n");
+    image_viewer_t *viewer = imageviewer_create("Image Viewer", 100, 100);
+    if (!viewer) {
+        print_str("Failed to create viewer window\n");
+        return;
+    }
+    print_str("Window created.\n");
+
+    print_str("Loading image file...\n");
+    if (imageviewer_load_file(viewer, argv[1]) != 0) {
+        print_str("Failed to load image: ");
+        print_str(argv[1]);
+        print_str("\n");
+        imageviewer_close(viewer);
+        return;
+    }
+
+    print_str("Image loaded successfully!\n");
+    print_str("Drag the title bar to move. Click X to close.\n");
+}
+
+static void cmd_run(int argc, char **argv)
+{
+    if (argc < 2) {
+        print_str("Usage: run <program>\n");
+        return;
+    }
+
+    print_str("Running: ");
+    print_str(argv[1]);
+    print_str("\n");
+
+    int ret = process_exec_file(argv[1]);
+    if (ret < 0) {
+        print_str("Failed to execute program (error ");
+        print_int(-ret);
+        print_str(")\n");
+    } else {
+        print_str("Program exited with code ");
+        print_int(ret);
+        print_str("\n");
+    }
+}
+
 // Initialize the shell
 void shell_init(void)
 {
@@ -776,36 +1176,35 @@ void shell_run(void)
         // Update if position OR buttons changed
         if (mouse.x != last_x || mouse.y != last_y || mouse.buttons != last_buttons)
         {
+            // First let the window manager handle mouse events
+            wm_handle_mouse(mouse.x, mouse.y, mouse.buttons);
+
+            // Update cursor state based on context
+            if (wm_is_dragging()) {
+                set_cursor_state(CURSOR_MOVE);
+                set_cursor_color(0xFFFFFF);
+            } else {
+                // Check if hovering over a window title bar
+                window_t *win = wm_get_window_at(mouse.x, mouse.y);
+                if (win && mouse.y < win->y + WINDOW_TITLE_HEIGHT && mouse.y >= win->y) {
+                    set_cursor_state(CURSOR_HAND);
+                } else {
+                    set_cursor_state(CURSOR_ARROW);
+                }
+                set_cursor_color(0xFFFFFF);
+            }
+
             cursor_update(mouse.x, mouse.y);
             last_x = mouse.x;
             last_y = mouse.y;
             last_buttons = mouse.buttons;
-
-            // Optional: Handle click events
-            if (mouse.buttons & MOUSE_LEFT_BUTTON)
-            {
-                set_cursor_color(0xFF0000); // Change cursor color on click
-
-                draw_circle(mouse.x, mouse.y, 3, 0xFFFF00, 1);
-                // You can add click handling here
-                // For example, draw a dot where clicked:
-                // put_pixel(mouse.x, mouse.y, 0xFFFF00);
-            }
-            else if (mouse.buttons & MOUSE_RIGHT_BUTTON)
-            {
-                set_cursor_color(0x0000FF); // Change cursor color on right click
-                // clear the dot where right-clicked:
-                draw_circle(mouse.x, mouse.y, 3, COLOR_BLACK, 1);
-            }
-            else if (mouse.buttons & MOUSE_MIDDLE_BUTTON)
-            {
-                set_cursor_color(0x00FF00); // Change cursor color on middle click
-            }
-            else
-            {
-                set_cursor_color(0xFFFFFF); // Default cursor color
-            }
         }
+
+        // Render windows (only if something changed)
+        wm_render();
+
+        // Process network packets
+        net_process_packet();
 
         // // Debug: show interrupt count occasionally
         // extern volatile uint32_t mouse_interrupt_count;

@@ -178,7 +178,7 @@ void *kmalloc_aligned(size_t size, size_t alignment)
     }
 
     // Allocate extra space for alignment
-    size_t total_size = size + alignment + sizeof(heap_block_t);
+    size_t total_size = size + alignment;
     void *ptr = kmalloc(total_size);
 
     if (!ptr)
@@ -188,9 +188,10 @@ void *kmalloc_aligned(size_t size, size_t alignment)
     uintptr_t addr = (uintptr_t)ptr;
     uintptr_t aligned_addr = (addr + alignment - 1) & ~(alignment - 1);
 
-    // For simplicity, just return the allocated pointer
-    // (proper implementation would store offset for kfree)
-    return ptr;
+    // Return the aligned address
+    // Note: kfree won't work correctly on this pointer, but for
+    // long-lived allocations like descriptor rings this is fine
+    return (void *)aligned_addr;
 }
 
 // Allocate and zero memory

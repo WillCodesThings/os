@@ -16,6 +16,7 @@
 #include <fs/vfs.h>
 #include <fs/vfs_mount.h>
 #include <fs/simplefs.h>
+#include <fs/tmpfs.h>
 
 #include <memory/heap.h>
 
@@ -24,12 +25,6 @@ void kernel_filesystem_init(void)
     serial_print("\n=== Filesystem Initialization ===\n");
 
     serial_print("\n[1/7] Scanning for partitions...\n");
-
-    // if (partition_auto_create(ATA_SECONDARY_MASTER) != 0)
-    // {
-    //     serial_print("Failed to auto-partition secondary master!\n");
-    //     return;
-    // }
     partition_init();
 
     serial_print("\n[2/7] Initializing ATA block devices...\n");
@@ -40,7 +35,9 @@ void kernel_filesystem_init(void)
         serial_print("No partitions found on primary master!\n");
         if (partition_auto_create(ATA_PRIMARY_MASTER) != 0)
         {
-            serial_print("Failed to auto-partition primary master!\n");
+            serial_print("No disk available - falling back to tmpfs\n");
+            tmpfs_init();
+            serial_print("\n=== Filesystem Initialization Complete (tmpfs) ===\n\n");
             return;
         }
         serial_print("Auto MBR Partitioning successful!\n");
@@ -49,13 +46,16 @@ void kernel_filesystem_init(void)
         p = partition_get(ATA_PRIMARY_MASTER, 0);
         if (!p)
         {
-            serial_print("Failed to re-initialize partitions!\n");
+            serial_print("Failed to re-initialize partitions - falling back to tmpfs\n");
+            tmpfs_init();
+            serial_print("\n=== Filesystem Initialization Complete (tmpfs) ===\n\n");
             return;
         }
     }
 
     // Wrap the partition as its own block device
     block_device_t *part = partition_create_block_device(p);
+    (void)part;  // Suppress unused warning
 
     serial_print("\n[3/7] Detected partitions:\n");
     partition_list();
@@ -73,8 +73,8 @@ void kernel_filesystem_init(void)
     }
     else
     {
-        serial_print("ERROR: Failed to mount root filesystem!\n");
-        return;
+        serial_print("ERROR: Failed to mount simplefs - falling back to tmpfs\n");
+        tmpfs_init();
     }
 
     serial_print("\n[7/7] Current mount configuration:\n");

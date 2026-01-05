@@ -1,30 +1,32 @@
 #include <fs/tmpfs.h>
 #include <fs/vfs.h>
 #include <shell/shell.h>
+#include <memory/heap.h>
 
-#define MAX_FILES 256
-#define MAX_FILE_SIZE 4096
+#define MAX_FILES 64
+#define MAX_CHILDREN 64
+#define MAX_FILE_SIZE (512 * 1024)  // 512KB max per file
 
 typedef struct
 {
-    uint8_t data[MAX_FILE_SIZE];
+    uint8_t *data;           // Dynamically allocated
     uint32_t size;
-    vfs_node_t *children[MAX_FILES];
+    uint32_t capacity;
+    vfs_node_t *children[MAX_CHILDREN];
     uint32_t child_count;
 } tmpfs_data_t;
 
-static tmpfs_data_t file_data[MAX_FILES];
 static uint32_t next_inode = 1;
 
 // Allocate a new tmpfs data structure
 static tmpfs_data_t *tmpfs_alloc_data(void)
 {
-    static int next_free = 0;
-    if (next_free >= MAX_FILES)
-        return NULL;
+    tmpfs_data_t *data = (tmpfs_data_t *)kcalloc(1, sizeof(tmpfs_data_t));
+    if (!data) return NULL;
 
-    tmpfs_data_t *data = &file_data[next_free++];
     data->size = 0;
+    data->capacity = 0;
+    data->data = NULL;
     data->child_count = 0;
 
     return data;
@@ -37,7 +39,7 @@ static int tmpfs_read(vfs_node_t *node, uint32_t offset, uint32_t size, uint8_t 
         return -1;
 
     tmpfs_data_t *data = (tmpfs_data_t *)node->filesystem;
-    if (!data)
+    if (!data || !data->data)
         return -1;
 
     if (offset >= data->size)
@@ -66,9 +68,35 @@ static int tmpfs_write(vfs_node_t *node, uint32_t offset, uint32_t size, uint8_t
     if (!data)
         return -1;
 
-    if (offset + size > MAX_FILE_SIZE)
+    uint32_t needed = offset + size;
+    if (needed > MAX_FILE_SIZE)
     {
-        size = MAX_FILE_SIZE - offset;
+        needed = MAX_FILE_SIZE;
+        size = needed - offset;
+    }
+
+    // Allocate or expand buffer if needed
+    if (needed > data->capacity)
+    {
+        uint32_t new_cap = needed + 4096;  // Add some extra
+        if (new_cap > MAX_FILE_SIZE) new_cap = MAX_FILE_SIZE;
+
+        uint8_t *new_data = (uint8_t *)kmalloc(new_cap);
+        if (!new_data)
+            return -1;
+
+        // Copy existing data
+        if (data->data && data->size > 0)
+        {
+            for (uint32_t i = 0; i < data->size; i++)
+            {
+                new_data[i] = data->data[i];
+            }
+            kfree(data->data);
+        }
+
+        data->data = new_data;
+        data->capacity = new_cap;
     }
 
     for (uint32_t i = 0; i < size; i++)
@@ -133,24 +161,23 @@ static vfs_node_t *tmpfs_finddir(vfs_node_t *node, const char *name)
     return NULL;
 }
 
-// Create a new tmpfs node
+// Forward declaration
+static int tmpfs_create(vfs_node_t *parent, const char *name, uint32_t flags);
+
+// Create a new tmpfs node (internal version that returns the node)
 vfs_node_t *tmpfs_create_file(vfs_node_t *parent, const char *name, uint32_t flags)
 {
     if (!parent || !(parent->flags & VFS_DIRECTORY))
         return NULL;
 
     tmpfs_data_t *parent_data = (tmpfs_data_t *)parent->filesystem;
-    if (!parent_data || parent_data->child_count >= MAX_FILES)
+    if (!parent_data || parent_data->child_count >= MAX_CHILDREN)
         return NULL;
 
-    // Allocate new node
-    static vfs_node_t nodes[MAX_FILES];
-    static int next_node = 0;
-
-    if (next_node >= MAX_FILES)
+    // Allocate new node dynamically
+    vfs_node_t *node = (vfs_node_t *)kcalloc(1, sizeof(vfs_node_t));
+    if (!node)
         return NULL;
-
-    vfs_node_t *node = &nodes[next_node++];
 
     // Copy name
     int i = 0;
@@ -176,11 +203,19 @@ vfs_node_t *tmpfs_create_file(vfs_node_t *parent, const char *name, uint32_t fla
     node->close = NULL;
     node->readdir = tmpfs_readdir;
     node->finddir = tmpfs_finddir;
+    node->create = tmpfs_create;
 
     // Add to parent
     parent_data->children[parent_data->child_count++] = node;
 
     return node;
+}
+
+// VFS-compatible create wrapper (returns int instead of node)
+static int tmpfs_create(vfs_node_t *parent, const char *name, uint32_t flags)
+{
+    vfs_node_t *node = tmpfs_create_file(parent, name, flags);
+    return node ? 0 : -1;
 }
 
 void tmpfs_init(void)
@@ -201,6 +236,7 @@ void tmpfs_init(void)
     root.write = tmpfs_write;
     root.readdir = tmpfs_readdir;
     root.finddir = tmpfs_finddir;
+    root.create = tmpfs_create;
     root.open = NULL;
     root.close = NULL;
 

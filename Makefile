@@ -39,9 +39,9 @@ ARCH_ASM_OBJ := $(patsubst $(SRC_ARCH)/%.asm, $(BUILD_DIR)/x86_64/%.o, $(ARCH_AS
 OBJS := $(KERNEL_OBJ) $(ARCH_C_OBJ) $(ARCH_ASM_OBJ)
 
 
-.PHONY: all build-x86_64 clean check
+.PHONY: all clean check
 
-all: build-x86_64
+all: $(DIST_DIR)/kernel.iso
 
 # --- Kernel C files ---
 $(BUILD_DIR)/kernel/%.o: $(SRC_KERNEL)/%.c
@@ -58,11 +58,15 @@ $(BUILD_DIR)/x86_64/%.o: $(SRC_ARCH)/%.asm
 	@mkdir -p $(dir $@)
 	$(AS) -f elf64 $< -o $@
 
-build-x86_64: $(OBJS)
+# --- Link kernel binary ---
+$(DIST_DIR)/kernel.bin: $(OBJS) $(LINKER)
 	@mkdir -p $(DIST_DIR)
-	$(LD) -n -o $(DIST_DIR)/kernel.bin -T $(LINKER) $(OBJS)
+	$(LD) -n -o $@ -T $(LINKER) $(OBJS)
+
+# --- Create bootable ISO ---
+$(DIST_DIR)/kernel.iso: $(DIST_DIR)/kernel.bin
 	cp $(DIST_DIR)/kernel.bin $(ISO_DIR)/boot/kernel.bin
-	grub-mkrescue /usr/lib/grub/i386-pc -o $(DIST_DIR)/kernel.iso $(ISO_DIR)
+	grub-mkrescue /usr/lib/grub/i386-pc -o $@ $(ISO_DIR)
 
 check:
 	@echo "Checking for implicit declarations..."

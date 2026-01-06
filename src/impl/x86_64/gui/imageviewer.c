@@ -1,9 +1,12 @@
 #include "gui/imageviewer.h"
 #include "gui/window.h"
 #include "gui/bmp.h"
+#include "gui/png.h"
+#include "gui/jpg.h"
 #include "memory/heap.h"
 #include "utils/memory.h"
 #include "utils/string.h"
+#include "fs/vfs.h"
 
 // Default viewer size
 #define VIEWER_DEFAULT_WIDTH  400
@@ -22,7 +25,7 @@ static void imageviewer_paint(window_t *win) {
     window_clear(win, 0x222222);
 
     // Draw image
-    bmp_image_t *img = viewer->image;
+    generic_image_t *img = viewer->image;
 
     // Calculate centered position if image is smaller than window
     int32_t offset_x = 0;
@@ -46,13 +49,23 @@ static void imageviewer_paint(window_t *win) {
     }
 }
 
+// Free image based on format
+static void free_image(image_viewer_t *viewer) {
+    if (!viewer || !viewer->image) return;
+
+    // All image types have the same structure, so we can free generically
+    if (viewer->image->pixels) {
+        kfree(viewer->image->pixels);
+    }
+    kfree(viewer->image);
+    viewer->image = 0;
+}
+
 // Close callback
 static void imageviewer_on_close(window_t *win) {
     image_viewer_t *viewer = (image_viewer_t *)win->user_data;
     if (viewer) {
-        if (viewer->image) {
-            bmp_free(viewer->image);
-        }
+        free_image(viewer);
         kfree(viewer);
     }
 }
@@ -82,18 +95,77 @@ image_viewer_t *imageviewer_create(const char *title, int32_t x, int32_t y) {
     return viewer;
 }
 
+// Detect image format from data
+static image_format_t detect_format(const uint8_t *data, size_t size) {
+    if (size < 8) return IMG_FORMAT_UNKNOWN;
+
+    // Check BMP signature (BM)
+    if (data[0] == 'B' && data[1] == 'M') {
+        return IMG_FORMAT_BMP;
+    }
+
+    // Check PNG signature
+    if (data[0] == 0x89 && data[1] == 'P' && data[2] == 'N' && data[3] == 'G') {
+        return IMG_FORMAT_PNG;
+    }
+
+    // Check JPEG signature (FFD8)
+    if (data[0] == 0xFF && data[1] == 0xD8) {
+        return IMG_FORMAT_JPG;
+    }
+
+    return IMG_FORMAT_UNKNOWN;
+}
+
+// Load image from data based on format
+static generic_image_t *load_image_data(const uint8_t *data, size_t size, image_format_t format) {
+    switch (format) {
+        case IMG_FORMAT_BMP:
+            return (generic_image_t *)bmp_load(data, size);
+        case IMG_FORMAT_PNG:
+            return (generic_image_t *)png_load(data, size);
+        case IMG_FORMAT_JPG:
+            return (generic_image_t *)jpg_load(data, size);
+        default:
+            return 0;
+    }
+}
+
 // Load from file
 int imageviewer_load_file(image_viewer_t *viewer, const char *path) {
     if (!viewer) return -1;
 
     // Free existing image
-    if (viewer->image) {
-        bmp_free(viewer->image);
-        viewer->image = 0;
+    free_image(viewer);
+
+    // Read file data
+    vfs_node_t *node = vfs_open(path, VFS_READ);
+    if (!node) return -1;
+
+    uint8_t *buffer = (uint8_t *)kmalloc(node->length);
+    if (!buffer) {
+        vfs_close(node);
+        return -1;
     }
 
-    // Load new image
-    viewer->image = bmp_load_file(path);
+    int bytes_read = vfs_read(node, 0, node->length, buffer);
+    vfs_close(node);
+
+    if (bytes_read <= 0) {
+        kfree(buffer);
+        return -1;
+    }
+
+    // Detect format and load
+    viewer->format = detect_format(buffer, bytes_read);
+    if (viewer->format == IMG_FORMAT_UNKNOWN) {
+        kfree(buffer);
+        return -1;
+    }
+
+    viewer->image = load_image_data(buffer, bytes_read, viewer->format);
+    kfree(buffer);
+
     if (!viewer->image) {
         return -1;
     }
@@ -128,13 +200,15 @@ int imageviewer_load_data(image_viewer_t *viewer, const uint8_t *data, size_t si
     if (!viewer || !data) return -1;
 
     // Free existing image
-    if (viewer->image) {
-        bmp_free(viewer->image);
-        viewer->image = 0;
+    free_image(viewer);
+
+    // Detect format and load
+    viewer->format = detect_format(data, size);
+    if (viewer->format == IMG_FORMAT_UNKNOWN) {
+        return -1;
     }
 
-    // Load new image
-    viewer->image = bmp_load(data, size);
+    viewer->image = load_image_data(data, size, viewer->format);
     if (!viewer->image) {
         return -1;
     }

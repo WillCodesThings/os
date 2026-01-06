@@ -218,19 +218,31 @@ void kfree(void *ptr)
     if (!ptr)
         return;
 
+    serial_print("kfree: ptr=");
+    serial_print_hex((uint64_t)ptr);
+    serial_print(" size=");
+
     // Get block header (before the data pointer)
     heap_block_t *block = (heap_block_t *)((uint8_t *)ptr - sizeof(heap_block_t));
 
     // Validate magic number
     if (block->magic != HEAP_MAGIC)
     {
+        serial_print("??? (INVALID)\n");
         serial_print("kfree: Invalid pointer or corrupted heap!\n");
         return;
     }
 
+    serial_print_dec(block->size);
+    serial_print(" used=");
+    serial_print_dec(block->used);
+    serial_print("\n");
+
     if (!block->used)
     {
-        serial_print("kfree: Double free detected!\n");
+        serial_print("kfree: Double free detected! ptr=");
+        serial_print_hex((uint64_t)ptr);
+        serial_print("\n");
         return;
     }
 

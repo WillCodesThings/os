@@ -85,6 +85,16 @@ static void process_scancode(uint8_t scancode)
 
     if (!(scancode & 0x80))
     { // Only on key press
+        // Handle Ctrl+key combinations
+        if (ctrl_pressed)
+        {
+            if (scancode == 0x1F)  // S key
+            {
+                kb_buffer_put(0x13);  // Ctrl+S (ASCII DC3)
+                return;
+            }
+        }
+
         if (scancode < sizeof(scancode_to_ascii) &&
             scancode_to_ascii[scancode])
         {

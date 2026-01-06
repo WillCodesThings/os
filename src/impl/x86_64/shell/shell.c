@@ -17,6 +17,10 @@
 #include <gui/window.h>
 #include <gui/bmp.h>
 #include <gui/imageviewer.h>
+#include <gui/texteditor.h>
+#include <gui/drawapp.h>
+#include <gui/guiterminal.h>
+#include <gui/desktop.h>
 #include <exec/process.h>
 
 // Constants
@@ -65,6 +69,8 @@ static void cmd_netstat(int argc, char **argv);
 static void cmd_wget(int argc, char **argv);
 static void cmd_view(int argc, char **argv);
 static void cmd_run(int argc, char **argv);
+static void cmd_gui(int argc, char **argv);
+static void cmd_edit(int argc, char **argv);
 
 // Command table
 static const command_t commands[MAX_COMMANDS] = {
@@ -88,6 +94,8 @@ static const command_t commands[MAX_COMMANDS] = {
     {"wget", "Fetch URL content (wget <ip> <port> <path>)", cmd_wget},
     {"view", "Open image viewer (view <file.bmp>)", cmd_view},
     {"run", "Run an ELF binary (run <file>)", cmd_run},
+    {"gui", "Launch GUI desktop with apps", cmd_gui},
+    {"edit", "Open text editor (edit [file])", cmd_edit},
     {NULL, NULL, NULL} // Sentinel
 };
 
@@ -1051,6 +1059,37 @@ static void cmd_run(int argc, char **argv)
     }
 }
 
+static void cmd_gui(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    print_str("Launching Desktop Environment...\n");
+
+    // Initialize desktop
+    desktop_init();
+
+    print_str("Desktop ready!\n");
+    print_str("Click taskbar buttons to open apps.\n");
+    print_str("Drag title bars to move windows.\n");
+    print_str("Click X to close windows.\n");
+}
+
+static void cmd_edit(int argc, char **argv)
+{
+    // Make sure desktop is active first
+    if (!desktop_is_active()) {
+        desktop_init();
+    }
+
+    // Open text editor via desktop
+    desktop_open_app(APP_EDITOR);
+
+    print_str("Text editor opened!\n");
+    (void)argc;
+    (void)argv;
+}
+
 // Initialize the shell
 void shell_init(void)
 {
@@ -1159,10 +1198,20 @@ void shell_run(void)
         if (keyboard_available())
         {
             char c = keyboard_read();
-            shell_process_char(c);
-            if (c >= 32 && c != 127) // printable ASCII only
-            {
-                print_char(c);
+
+            // Route keyboard to desktop if active
+            int handled = 0;
+            if (desktop_is_active()) {
+                handled = desktop_handle_key(c);
+            }
+
+            // If not handled by desktop, process in shell
+            if (!handled) {
+                shell_process_char(c);
+                if (c >= 32 && c != 127) // printable ASCII only
+                {
+                    print_char(c);
+                }
             }
         }
 
@@ -1176,8 +1225,16 @@ void shell_run(void)
         // Update if position OR buttons changed
         if (mouse.x != last_x || mouse.y != last_y || mouse.buttons != last_buttons)
         {
-            // First let the window manager handle mouse events
-            wm_handle_mouse(mouse.x, mouse.y, mouse.buttons);
+            // Let desktop handle mouse first (for taskbar)
+            int desktop_handled = 0;
+            if (desktop_is_active()) {
+                desktop_handled = desktop_handle_mouse(mouse.x, mouse.y, mouse.buttons);
+            }
+
+            // Let window manager handle if desktop didn't consume it
+            if (!desktop_handled) {
+                wm_handle_mouse(mouse.x, mouse.y, mouse.buttons);
+            }
 
             // Update cursor state based on context
             if (wm_is_dragging()) {

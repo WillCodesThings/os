@@ -1,4 +1,5 @@
 #include "gui/window.h"
+#include "gui/desktop.h"
 #include "graphics/graphics.h"
 #include "graphics/font.h"
 #include "graphics/cursor.h"
@@ -109,6 +110,9 @@ window_t *window_create(const char *title, int32_t x, int32_t y,
 // Destroy window
 void window_destroy(window_t *win) {
     if (!win) return;
+
+    // Notify desktop before destroying (so it can clear references)
+    desktop_notify_window_closed(win);
 
     // Call close callback
     if (win->on_close) {
@@ -456,7 +460,12 @@ void wm_render(void) {
     // Handle case where all windows were destroyed
     if (wm_global_dirty && window_count == 0) {
         cursor_hide();
-        clear_screen(COLOR_BLACK);  // Clear to shell background
+        // If desktop is active, let it render, otherwise clear to black
+        if (desktop_is_active()) {
+            desktop_render();
+        } else {
+            clear_screen(COLOR_BLACK);  // Clear to shell background
+        }
         wm_global_dirty = 0;
         cursor_show();
         return;
@@ -470,9 +479,13 @@ void wm_render(void) {
     // Hide cursor before rendering (so we don't save window content as background)
     cursor_hide();
 
-    // If global dirty (from drag end), clear desktop to erase old window position
+    // If global dirty (from drag end), redraw background
     if (wm_global_dirty) {
-        clear_screen(DESKTOP_COLOR);
+        if (desktop_is_active()) {
+            desktop_render();
+        } else {
+            clear_screen(DESKTOP_COLOR);
+        }
     }
 
     // Sort windows by z-order

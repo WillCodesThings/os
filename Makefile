@@ -20,6 +20,9 @@ CFLAGS := -ffreestanding $(INCLUDES) \
           -Werror=implicit-function-declaration \
           -Werror=incompatible-pointer-types \
           -Werror=int-conversion \
+          -mno-sse -mno-sse2 -mno-mmx \
+          -mno-red-zone \
+          -mcmodel=kernel \
           -MMD -MP
 
 ifeq ($(BUILD),debug)

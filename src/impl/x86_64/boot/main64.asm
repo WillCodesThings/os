@@ -4,6 +4,7 @@ extern kernel_main
 section .text
 bits 64
 long_mode_start:
+    cli                 ; Disable interrupts until IDT is set up
     mov ax , 0
     mov ss, ax
     mov ds, ax

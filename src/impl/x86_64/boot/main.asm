@@ -18,6 +18,7 @@ pitch: dd 0
 section .text
 bits 32
 start:
+    cli                 ; Disable interrupts immediately
     mov esp, stack_top
     
     ; EBX contains the physical address of the Multiboot2 info structure

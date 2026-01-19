@@ -1,4 +1,5 @@
 ; e1000 network card interrupt handler
+[BITS 64]
 
 section .text
 global e1000_interrupt_handler

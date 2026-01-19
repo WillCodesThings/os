@@ -1,5 +1,6 @@
 ; Process switching assembly routines
 ; x86_64 System V ABI: arguments in rdi, rsi, rdx, rcx, r8, r9
+[BITS 64]
 
 section .data
     saved_kernel_rsp: dq 0

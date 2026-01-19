@@ -3,6 +3,7 @@
 ; Syscall number in RAX
 ; Arguments in RDI, RSI, RDX, R10, R8, R9
 ; Return value in RAX
+[BITS 64]
 
 section .text
 global syscall_interrupt_handler

@@ -2,7 +2,7 @@ CC := x86_64-elf-gcc
 LD := x86_64-elf-ld
 AS := nasm
 
-BUILD ?= debug
+BUILD ?= release
 
 SRC_KERNEL := src/impl/kernel
 SRC_ARCH   := src/impl/x86_64

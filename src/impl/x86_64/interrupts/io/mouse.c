@@ -252,8 +252,8 @@ void mouse_test_polling(void)
 
     for (int i = 0; i < 10; i++)
     {
-        // Wait a bit
-        for (volatile int j = 0; j < 10000000; j++)
+        // Wait a bit (reduced from 10M to 100K for faster init)
+        for (volatile int j = 0; j < 100000; j++)
             ;
 
         // Check if data is available

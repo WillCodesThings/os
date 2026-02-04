@@ -2,6 +2,7 @@
 #include <interrupts/idt.h>
 #include <interrupts/pic.h>
 #include <interrupts/port_io.h>
+#include <interrupts/io/keyboard.h>
 #include <shell/print.h>
 
 // Forward declaration of the assembly keyboard handler
@@ -20,6 +21,7 @@ static volatile int ctrl_pressed = 0;
 static volatile int alt_pressed = 0;
 static volatile int caps_lock = 0;
 static volatile int num_lock = 0;
+static volatile int extended_scancode = 0;
 
 // Simple US QWERTY keymap
 static const char scancode_to_ascii[] = {
@@ -50,6 +52,58 @@ static void kb_buffer_put(uint8_t c)
 // Scancode processing
 static void process_scancode(uint8_t scancode)
 {
+    // Handle extended scancode prefix (0xE0)
+    if (scancode == 0xE0)
+    {
+        extended_scancode = 1;
+        return;
+    }
+
+    // Handle extended scancodes (arrow keys, etc.)
+    if (extended_scancode)
+    {
+        extended_scancode = 0;
+
+        // Only process key press (not release)
+        if (!(scancode & 0x80))
+        {
+            switch (scancode)
+            {
+            case 0x48: // Up arrow
+                kb_buffer_put(KEY_UP);
+                return;
+            case 0x50: // Down arrow
+                kb_buffer_put(KEY_DOWN);
+                return;
+            case 0x4B: // Left arrow
+                kb_buffer_put(KEY_LEFT);
+                return;
+            case 0x4D: // Right arrow
+                kb_buffer_put(KEY_RIGHT);
+                return;
+            case 0x47: // Home
+                kb_buffer_put(KEY_HOME);
+                return;
+            case 0x4F: // End
+                kb_buffer_put(KEY_END);
+                return;
+            case 0x53: // Delete
+                kb_buffer_put(KEY_DELETE);
+                return;
+            case 0x49: // Page Up
+                kb_buffer_put(KEY_PGUP);
+                return;
+            case 0x51: // Page Down
+                kb_buffer_put(KEY_PGDN);
+                return;
+            case 0x52: // Insert
+                kb_buffer_put(KEY_INSERT);
+                return;
+            }
+        }
+        return;
+    }
+
     if (scancode == 0x2A || scancode == 0x36)
     {
         shift_pressed = 1; // Shift pressed
@@ -88,9 +142,9 @@ static void process_scancode(uint8_t scancode)
         // Handle Ctrl+key combinations
         if (ctrl_pressed)
         {
-            if (scancode == 0x1F)  // S key
+            if (scancode == 0x1F) // S key
             {
-                kb_buffer_put(0x13);  // Ctrl+S (ASCII DC3)
+                kb_buffer_put(0x13); // Ctrl+S (ASCII DC3)
                 return;
             }
         }

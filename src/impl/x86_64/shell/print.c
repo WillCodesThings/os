@@ -35,6 +35,11 @@ static uint32_t bg_color = 0x000000; // Black
 // Track which character cells have text (for clearing text only)
 static char text_buffer[80 * 25];
 
+// Output redirection for piping
+static char *redirect_buffer = NULL;
+static int redirect_pos = 0;
+static int redirect_max = 0;
+
 void print_init(void)
 {
     max_cols = get_screen_width() / CHAR_WIDTH;
@@ -121,8 +126,71 @@ void print_set_cursor(size_t new_row, size_t new_col)
     }
 }
 
+uint32_t print_get_cursor_x(void)
+{
+    return cursor_x;
+}
+
+uint32_t print_get_cursor_y(void)
+{
+    return cursor_y;
+}
+
+void print_move_cursor_left(void)
+{
+    if (cursor_x > 0)
+    {
+        cursor_x--;
+    }
+}
+
+void print_move_cursor_right(void)
+{
+    if (cursor_x < max_cols - 1)
+    {
+        cursor_x++;
+    }
+}
+
+// Enable output redirection to a buffer (for piping)
+void print_redirect_to_buffer(char *buffer, int max_size)
+{
+    redirect_buffer = buffer;
+    redirect_pos = 0;
+    redirect_max = max_size;
+    if (buffer)
+    {
+        buffer[0] = '\0';
+    }
+}
+
+// Disable output redirection
+void print_redirect_disable(void)
+{
+    redirect_buffer = NULL;
+    redirect_pos = 0;
+    redirect_max = 0;
+}
+
+// Get current redirect buffer position (length of captured output)
+int print_redirect_get_length(void)
+{
+    return redirect_pos;
+}
+
 void print_char(char c)
 {
+    // If redirecting output, write to buffer instead of screen
+    if (redirect_buffer)
+    {
+        if (redirect_pos < redirect_max - 1)
+        {
+            redirect_buffer[redirect_pos++] = c;
+            redirect_buffer[redirect_pos] = '\0';
+        }
+        return;
+    }
+
     if (c == '\n')
     {
         print_newline();

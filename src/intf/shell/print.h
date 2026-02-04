@@ -34,3 +34,13 @@ void printf(const char *format, ...);
 void print_hex(uint64_t value);
 void print_int(int num);
 void print_uint(uint32_t num);
+void print_set_cursor(size_t row, size_t col);
+uint32_t print_get_cursor_x(void);
+uint32_t print_get_cursor_y(void);
+void print_move_cursor_left(void);
+void print_move_cursor_right(void);
+
+// Output redirection for piping
+void print_redirect_to_buffer(char *buffer, int max_size);
+void print_redirect_disable(void);
+int print_redirect_get_length(void);

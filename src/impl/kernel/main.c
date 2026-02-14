@@ -20,6 +20,7 @@
 #include <fs/simplefs.h>
 
 #include <memory/heap.h>
+#include <memory/paging.h>
 
 #include <init/inits.h>
 
@@ -35,6 +36,9 @@
 void kernel_main(void)
 {
     init_interrupts_safe();
+
+    // Detect physical memory and allocate page tables
+    paging_init();
 
     // Initialize input devices
     keyboard_init();

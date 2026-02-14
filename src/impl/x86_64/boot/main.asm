@@ -8,12 +8,14 @@ global screen_width
 global screen_height
 global bits_per_pixel
 global pitch
+global total_physical_memory
 
 framebuffer_address: dq 0
 screen_width: dd 0
 screen_height: dd 0
 bits_per_pixel: dd 0
 pitch: dd 0
+total_physical_memory: dq 0
 
 section .text
 bits 32
@@ -28,10 +30,10 @@ start:
     call check_cpuid
     call check_long_mode
 
-    ; Parse Multiboot2 info for framebuffer
+    ; Parse Multiboot2 info for framebuffer and memory map
     pop ebx
     push ebx
-    call parse_multiboot2_framebuffer
+    call parse_multiboot2_info
 
     call setup_page_tables
     call enable_paging
@@ -44,37 +46,40 @@ start:
 
     hlt
 
-; Parse Multiboot2 structure to find framebuffer info
-parse_multiboot2_framebuffer:
+; Parse Multiboot2 structure to find framebuffer and memory map info
+parse_multiboot2_info:
     push ebp
     mov ebp, esp
     push ebx
     push esi
     push edi
-    
+
     mov esi, [ebp + 8]  ; Get multiboot info address from stack
-    
+
     ; First 8 bytes are total_size and reserved
-    mov ecx, [esi]      ; Total size
     add esi, 8          ; Skip to first tag
-    
+
 .tag_loop:
     ; Check if we've reached the end
     mov eax, [esi]      ; Tag type
     cmp eax, 0          ; Type 0 = end tag
-    je .not_found
-    
+    je .done_tags
+
     cmp eax, 8          ; Type 8 = framebuffer info
     je .found_framebuffer
-    
+
+    cmp eax, 6          ; Type 6 = memory map
+    je .found_mmap
+
+.next_tag:
     ; Move to next tag
     mov edx, [esi + 4]  ; Tag size
     add esi, edx        ; Skip this tag
-    
+
     ; Align to 8-byte boundary
     add esi, 7
     and esi, ~7
-    
+
     jmp .tag_loop
 
 .found_framebuffer:
@@ -86,35 +91,83 @@ parse_multiboot2_framebuffer:
     ; +20: u32 framebuffer_width
     ; +24: u32 framebuffer_height
     ; +28: u8  framebuffer_bpp
-    ; +29: u8  framebuffer_type (1 = RGB)
-    
-    ; Read framebuffer address (64-bit, but we only need lower 32 bits)
+
     mov eax, [esi + 8]
     mov [framebuffer_address], eax
     mov eax, [esi + 12]
     mov [framebuffer_address + 4], eax
-    
-    ; Read other info
+
     mov eax, [esi + 16]
     mov [pitch], eax
-    
+
     mov eax, [esi + 20]
     mov [screen_width], eax
-    
+
     mov eax, [esi + 24]
     mov [screen_height], eax
-    
+
     movzx eax, byte [esi + 28]
     mov [bits_per_pixel], eax
-    
+
+    jmp .next_tag
+
+.found_mmap:
+    ; Memory map tag structure:
+    ; +0:  u32 type (6)
+    ; +4:  u32 tag_size
+    ; +8:  u32 entry_size
+    ; +12: u32 entry_version
+    ; +16+: entries, each:
+    ;   +0: u64 base_addr
+    ;   +8: u64 length
+    ;   +16: u32 type (1=available)
+    ;   +20: u32 reserved
+
+    mov ecx, [esi + 4]      ; tag_size
+    mov ebx, [esi + 8]      ; entry_size
+    lea edi, [esi + 16]     ; pointer to first entry
+    add ecx, esi            ; ecx = end of tag
+
+    ; Zero the accumulator for total physical memory
+    xor eax, eax
+    mov [total_physical_memory], eax
+    mov [total_physical_memory + 4], eax
+
+.mmap_loop:
+    cmp edi, ecx
+    jge .mmap_done
+
+    ; Check entry type: 1 = available RAM
+    mov eax, [edi + 16]
+    cmp eax, 1
+    jne .mmap_next
+
+    ; Add this entry's length to total_physical_memory (64-bit add)
+    mov eax, [edi + 8]      ; length low 32 bits
+    add [total_physical_memory], eax
+    mov eax, [edi + 12]     ; length high 32 bits
+    adc [total_physical_memory + 4], eax
+
+.mmap_next:
+    add edi, ebx            ; advance by entry_size
+    jmp .mmap_loop
+
+.mmap_done:
+    jmp .next_tag
+
+.done_tags:
+    ; Check if framebuffer was found (screen_width != 0)
+    mov eax, [screen_width]
+    cmp eax, 0
+    je .no_framebuffer
+
     pop edi
     pop esi
     pop ebx
     pop ebp
     ret
 
-.not_found:
-    ; Framebuffer not found - error
+.no_framebuffer:
     mov al, 'F'
     mov [0xb8000], al
     cli

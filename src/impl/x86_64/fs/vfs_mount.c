@@ -4,7 +4,8 @@
 #include <disk/partition.h>
 #include <disk/partition_block_device.h>
 #include <memory/heap.h>
-#include <shell/shell.h>
+#include <utils/log.h>
+#include <drivers/serial.h>
 #include <utils/string.h>
 
 typedef struct
@@ -23,7 +24,7 @@ static int mount_count = 0;
 
 void vfs_mount_init(void)
 {
-    serial_print("Initializing VFS mount system...\n");
+    LOG_INFO("VFS", "Initializing VFS mount system...");
     mount_count = 0;
 
     for (int i = 0; i < MAX_MOUNTS; i++)
@@ -41,29 +42,23 @@ int vfs_mount_partition(const char *mount_path, uint8_t drive, uint8_t partition
 {
     if (mount_count >= MAX_MOUNTS)
     {
-        serial_print("Mount table full\n");
+        LOG_ERROR("VFS", "Mount table full");
         return -1;
     }
 
-    serial_print("Mounting ");
-    serial_print(mount_path);
-    serial_print(" from drive ");
-    serial_print_hex(drive);
-    serial_print(", partition ");
-    serial_print_hex(partition_index);
-    serial_print("\n");
+    LOG_INFO("VFS", "Mounting %s from drive %x, partition %x", mount_path, (uint32_t)drive, (uint32_t)partition_index);
 
     partition_info_t *partition = partition_get(drive, partition_index);
     if (!partition)
     {
-        serial_print("Partition not found\n");
+        LOG_ERROR("VFS", "Partition not found");
         return -1;
     }
 
     block_device_t *part_block_dev = partition_create_block_device(partition);
     if (!part_block_dev)
     {
-        serial_print("Failed to create partition block device\n");
+        LOG_ERROR("VFS", "Failed to create partition block device");
         return -1;
     }
 
@@ -75,14 +70,14 @@ int vfs_mount_partition(const char *mount_path, uint8_t drive, uint8_t partition
 
         if (simplefs_mount(part_block_dev) != 0)
         {
-            serial_print("No valid filesystem found, formatting...\n");
+            LOG_WARN("VFS", "No valid filesystem, formatting...");
 
             uint32_t total_blocks = partition->num_sectors;
             simplefs_format(part_block_dev, total_blocks, 20);
 
             if (simplefs_mount(part_block_dev) != 0)
             {
-                serial_print("Failed to mount after format\n");
+                LOG_ERROR("VFS", "Failed to mount after format");
                 return -1;
             }
         }
@@ -91,9 +86,7 @@ int vfs_mount_partition(const char *mount_path, uint8_t drive, uint8_t partition
     }
     else
     {
-        serial_print("Unsupported filesystem type: ");
-        serial_print(fs_type);
-        serial_print("\n");
+        LOG_ERROR("VFS", "Unsupported filesystem type: %s", fs_type);
         return -1;
     }
 
@@ -106,9 +99,7 @@ int vfs_mount_partition(const char *mount_path, uint8_t drive, uint8_t partition
     entry->is_active = 1;
     mount_count++;
 
-    serial_print("Successfully mounted ");
-    serial_print(mount_path);
-    serial_print("\n");
+    LOG_INFO("VFS", "Successfully mounted %s", mount_path);
 
     return 0;
 }
@@ -120,16 +111,12 @@ int vfs_unmount(const char *mount_path)
         if (strcmp(mount_table[i].mount_path, mount_path) == 0 && mount_table[i].is_active)
         {
             mount_table[i].is_active = 0;
-            serial_print("Unmounted ");
-            serial_print(mount_path);
-            serial_print("\n");
+            LOG_INFO("VFS", "Unmounted %s", mount_path);
             return 0;
         }
     }
 
-    serial_print("Mount point not found: ");
-    serial_print(mount_path);
-    serial_print("\n");
+    LOG_WARN("VFS", "Mount point not found: %s", mount_path);
     return -1;
 }
 
@@ -185,7 +172,7 @@ block_device_t *vfs_get_block_device_for_path(const char *path)
 
 void vfs_list_mounts(void)
 {
-    serial_print("=== Mounted Filesystems ===\n");
+    LOG_INFO("VFS", "=== Mounted Filesystems ===");
 
     int active_count = 0;
     for (int i = 0; i < mount_count; i++)
@@ -196,24 +183,19 @@ void vfs_list_mounts(void)
         active_count++;
         mount_entry_t *entry = &mount_table[i];
 
-        serial_print(entry->mount_path);
-        serial_print(" -> Drive ");
-        serial_print_hex(entry->partition->drive);
-        serial_print(", Partition ");
-        serial_print_hex(entry->partition->partition_index);
-        serial_print(" (");
-        serial_print(entry->fs_type);
-        serial_print(")\n");
+        LOG_INFO("VFS", "%s -> Drive %x, Partition %x (%s)",
+                 entry->mount_path,
+                 (uint32_t)entry->partition->drive,
+                 (uint32_t)entry->partition->partition_index,
+                 entry->fs_type);
 
-        serial_print("  Start LBA: ");
-        serial_print_hex(entry->partition->lba_start);
-        serial_print(", Size: ");
-        serial_print_hex(entry->partition->num_sectors);
-        serial_print(" sectors\n");
+        LOG_INFO("VFS", "  Start LBA: %x, Size: %x sectors",
+                 entry->partition->lba_start,
+                 entry->partition->num_sectors);
     }
 
     if (active_count == 0)
     {
-        serial_print("No filesystems mounted\n");
+        LOG_INFO("VFS", "No filesystems mounted");
     }
 }

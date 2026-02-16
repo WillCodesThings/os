@@ -10,7 +10,14 @@
     "shell.h": "c",
     "print.h": "c",
     "test.h": "c",
-    "drawtest.h": "c"
+    "drawtest.h": "c",
+    "log.h": "c",
+    "serial.h": "c"
   },
-  "C_Cpp.errorSquiggles": "disabled"
+  "C_Cpp.errorSquiggles": "disabled",
+  "editor.formatOnSave": true,
+  "[c]": {
+    "editor.defaultFormatter": "ms-vscode.cpptools",
+    "editor.formatOnSave": true
+  }
 }

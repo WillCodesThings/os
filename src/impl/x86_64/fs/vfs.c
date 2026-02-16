@@ -1,6 +1,6 @@
 #include <fs/vfs.h>
 #include <shell/print.h>
-#include <shell/shell.h>
+#include <utils/log.h>
 #include <memory/heap.h>
 #include <utils/string.h>
 
@@ -45,7 +45,7 @@ static vfs_node_t *vfs_root = NULL;
 
 void vfs_init(void)
 {
-    serial_print("Initializing VFS...\n");
+    LOG_INFO("VFS", "Initializing VFS...");
     vfs_root = NULL;
 }
 

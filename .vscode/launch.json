@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Kernel (QEMU + GDB)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/dist/x86_64/kernel.bin",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "/opt/homebrew/bin/x86_64-elf-gdb",
+            "miDebuggerServerAddress": "localhost:1234",
+            "stopAtEntry": false,
+            "preLaunchTask": "Debug: Build and Launch QEMU",
+            "setupCommands": [
+                {
+                    "description": "Set architecture",
+                    "text": "set architecture i386:x86-64",
+                    "ignoreFailures": false
+                },
+                {
+                    "description": "Load kernel symbols",
+                    "text": "symbol-file ${workspaceFolder}/dist/x86_64/kernel.bin",
+                    "ignoreFailures": false
+                },
+                {
+                    "description": "Break at kernel entry",
+                    "text": "break kernel_main",
+                    "ignoreFailures": false
+                }
+            ]
+        }
+    ]
+}

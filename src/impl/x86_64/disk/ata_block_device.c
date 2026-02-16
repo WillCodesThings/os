@@ -1,7 +1,7 @@
 #include <disk/ata_block_device.h>
 #include <interrupts/io/ata.h>
 #include <memory/heap.h>
-#include <shell/print.h>
+#include <utils/log.h>
 
 int ata_block_read(struct block_device *dev, uint32_t lba, uint8_t *buffer)
 {

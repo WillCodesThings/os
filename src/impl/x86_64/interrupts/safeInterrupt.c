@@ -4,7 +4,7 @@
 #include <interrupts/port_io.h>
 
 #include <shell/print.h>
-#include <shell/shell.h>
+#include <utils/log.h>
 
 // Declaration for the assembly-defined default handler
 extern void default_interrupt_handler(void);
@@ -311,62 +311,36 @@ void init_interrupts_safe()
 // Function to test interrupts with careful control
 void test_interrupts()
 {
-    // Print initial status
-    serial_print("Starting interrupt testing sequence...\n");
+    LOG_DEBUG("IRQ", "Starting interrupt testing sequence...");
 
     // 1. First, enable CPU interrupts with all hardware interrupts masked
-    serial_print("Enabling CPU interrupts with all hardware masked...\n");
+    LOG_DEBUG("IRQ", "Enabling CPU interrupts with all hardware masked...");
     asm volatile("sti");
 
     // Wait a bit to ensure system is stable
-    serial_print("Waiting to ensure stability...\n");
     for (volatile int i = 0; i < 1000000; i++)
         ;
 
     // 2. Now enable keyboard interrupt only
-    serial_print("Enabling keyboard interrupt only...\n");
+    LOG_DEBUG("IRQ", "Enabling keyboard interrupt...");
     outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << 1)); // Unmask IRQ1 (keyboard)
 
     // Wait again to ensure stability
-    serial_print("Waiting to verify keyboard interrupt works...\n");
     for (volatile int i = 0; i < 1000000; i++)
         ;
 
     // 3. Enable timer interrupt for system clock
-    // Uncomment when keyboard is working reliably
-    serial_print("Enabling timer interrupt...\n");
+    LOG_DEBUG("IRQ", "Enabling timer interrupt...");
     outb(PIC1_DATA, inb(PIC1_DATA) & ~(1 << 0)); // Unmask IRQ0 (timer)
 
-    serial_print("Interrupt testing complete - interrupts enabled!\n");
+    LOG_INFO("IRQ", "Interrupt testing complete - interrupts enabled");
 }
 
 // Debug function to print interrupt information
 void debug_print_interrupt(int interrupt_num)
 {
-    char buffer[32];
-
-    // Format: "INT: XX"
-    buffer[0] = 'I';
-    buffer[1] = 'N';
-    buffer[2] = 'T';
-    buffer[3] = ':';
-    buffer[4] = ' ';
-
-    // Convert interrupt number to string
-    if (interrupt_num < 10)
-    {
-        buffer[5] = '0' + interrupt_num;
-        buffer[6] = '\0';
-    }
-    else
-    {
-        buffer[5] = '0' + (interrupt_num / 10);
-        buffer[6] = '0' + (interrupt_num % 10);
-        buffer[7] = '\0';
-    }
-
-    serial_print(buffer);
-    serial_print("\n");
+    (void)interrupt_num;
+    LOG_TRACE("IRQ", "INT: %d", interrupt_num);
 }
 
 // C handler for default interrupts

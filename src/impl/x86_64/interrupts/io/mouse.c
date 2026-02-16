@@ -1,7 +1,8 @@
 #include <interrupts/io/mouse.h>
 #include <interrupts/idt.h>
 #include <interrupts/port_io.h>
-#include <shell/shell.h>
+#include <utils/log.h>
+#include <drivers/serial.h>
 
 // Forward declaration of assembly handler
 extern void mouse_interrupt_handler(void);
@@ -135,7 +136,7 @@ void mouse_handle_interrupt(void)
 
 void mouse_init(void)
 {
-    serial_print("Initializing mouse...\n");
+    LOG_INFO("IO", "Initializing mouse...");
 
     uint8_t status;
 
@@ -151,16 +152,14 @@ void mouse_init(void)
     // Enable auxiliary device
     mouse_wait_write();
     outb(MOUSE_CMD, 0xA8);
-    serial_print("Enabled auxiliary device\n");
+    LOG_DEBUG("IO", "Enabled auxiliary device");
 
     // Get controller configuration byte
     mouse_wait_write();
     outb(MOUSE_CMD, 0x20);
     mouse_wait_read();
     status = inb(MOUSE_PORT);
-    serial_print("Controller config: ");
-    serial_print_hex(status);
-    serial_print("\n");
+    LOG_DEBUG("IO", "Controller config: %x", (uint32_t)status);
 
     // Enable interrupts and mouse clock
     status |= 0x02;  // Enable mouse interrupt
@@ -175,45 +174,39 @@ void mouse_init(void)
     outb(MOUSE_PORT, status);
 
     // Reset mouse
-    serial_print("Resetting mouse...\n");
+    LOG_DEBUG("IO", "Resetting mouse...");
     mouse_write(0xFF);
     mouse_wait_read();
     uint8_t reset_ack = inb(MOUSE_PORT);
-    serial_print("Reset ACK: ");
-    serial_print_hex(reset_ack);
-    serial_print("\n");
+    (void)reset_ack;
+    LOG_DEBUG("IO", "Reset ACK: %x", (uint32_t)reset_ack);
 
     // Should receive 0xAA (self-test passed) and 0x00 (mouse ID)
     mouse_wait_read();
     uint8_t self_test = inb(MOUSE_PORT);
-    serial_print("Self-test: ");
-    serial_print_hex(self_test);
-    serial_print("\n");
+    LOG_DEBUG("IO", "Self-test: %x", (uint32_t)self_test);
 
     if (self_test == 0xAA)
     {
         mouse_wait_read();
         uint8_t mouse_id = inb(MOUSE_PORT);
-        serial_print("Mouse ID: ");
-        serial_print_hex(mouse_id);
-        serial_print("\n");
+        (void)mouse_id;
+        LOG_DEBUG("IO", "Mouse ID: %x", (uint32_t)mouse_id);
     }
 
     // Set defaults
     mouse_write(0xF6);
     mouse_wait_read();
     uint8_t defaults_ack = inb(MOUSE_PORT);
-    serial_print("Defaults ACK: ");
-    serial_print_hex(defaults_ack);
-    serial_print("\n");
+    (void)defaults_ack;
+    LOG_DEBUG("IO", "Defaults ACK: %x", (uint32_t)defaults_ack);
 
     // Enable data reporting
     mouse_write(0xF4);
     mouse_wait_read();
     uint8_t enable_ack = inb(MOUSE_PORT);
-    serial_print("Enable ACK: ");
-    serial_print_hex(enable_ack);
-    serial_print("\n");
+    (void)enable_ack;
+    LOG_DEBUG("IO", "Enable ACK: %x", (uint32_t)enable_ack);
 
     // Re-enable devices
     mouse_wait_write();
@@ -229,7 +222,7 @@ void mouse_init(void)
     mouse_cycle = 0;
 
     // Register interrupt handler
-    serial_print("Registering interrupt handler at 0x2C\n");
+    LOG_DEBUG("IO", "Registering mouse interrupt handler at 0x2C");
     idt_set_gate(0x2C, (uint64_t)mouse_interrupt_handler);
 
     // Unmask IRQ12 on follower PIC
@@ -242,13 +235,13 @@ void mouse_init(void)
     master_mask &= ~(1 << 2);
     outb(0x21, master_mask);
 
-    serial_print("Mouse initialized!\n");
+    LOG_INFO("IO", "Mouse initialized");
 }
 
 // Add this test function
 void mouse_test_polling(void)
 {
-    serial_print("Testing mouse with polling...\n");
+    LOG_DEBUG("IO", "Testing mouse with polling...");
 
     for (int i = 0; i < 10; i++)
     {
@@ -258,16 +251,13 @@ void mouse_test_polling(void)
 
         // Check if data is available
         uint8_t status = inb(MOUSE_STATUS);
-        serial_print("Status: ");
-        serial_print_hex(status);
+        LOG_DEBUG("IO", "Status: %x", (uint32_t)status);
 
         if (status & 0x01)
         {
             uint8_t data = inb(MOUSE_PORT);
-            serial_print(" Data: ");
-            serial_print_hex(data);
+            LOG_DEBUG("IO", "Data: %x", (uint32_t)data);
         }
-        serial_print("\n");
     }
 }
 

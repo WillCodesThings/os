@@ -2,8 +2,8 @@
 #include <interrupts/io/ata.h>
 #include <memory/heap.h>
 #include <utils/memory.h>
-#include <shell/shell.h>
-#include <shell/print.h>
+#include <utils/log.h>
+#include <drivers/serial.h>
 
 // MBR Partition Table Entry
 typedef struct
@@ -34,14 +34,12 @@ static int read_partition_table(uint8_t drive)
 {
     uint8_t mbr_buffer[512];
 
-    serial_print("Reading partition table from drive ");
-    serial_print_hex(drive);
-    serial_print("\n");
+    LOG_DEBUG("DISK", "Reading partition table from drive %x", (uint32_t)drive);
 
     // Read MBR (sector 0)
     if (ata_read_sector(drive, 0, mbr_buffer) != 0)
     {
-        serial_print("Failed to read MBR\n");
+        LOG_ERROR("DISK", "Failed to read MBR");
         return -1;
     }
 
@@ -50,13 +48,11 @@ static int read_partition_table(uint8_t drive)
     // Check MBR signature
     if (mbr->signature != 0xAA55)
     {
-        serial_print("Invalid MBR signature: ");
-        serial_print_hex(mbr->signature);
-        serial_print("\n");
+        LOG_WARN("DISK", "Invalid MBR signature: %x", (uint32_t)mbr->signature);
         return -1;
     }
 
-    serial_print("Valid MBR found!\n");
+    LOG_DEBUG("DISK", "Valid MBR found");
 
     // Parse partition entries
     for (int i = 0; i < 4; i++)
@@ -68,7 +64,7 @@ static int read_partition_table(uint8_t drive)
 
         if (partition_count >= MAX_PARTITIONS)
         {
-            serial_print("Too many partitions detected\n");
+            LOG_WARN("DISK", "Too many partitions detected");
             break;
         }
 
@@ -80,15 +76,11 @@ static int read_partition_table(uint8_t drive)
         part->type = entry->partition_type;
         part->bootable = (entry->status == 0x80);
 
-        serial_print("Partition ");
-        serial_print_hex(i);
-        serial_print(": Type=");
-        serial_print_hex(entry->partition_type);
-        serial_print(" Start=");
-        serial_print_hex(entry->lba_start);
-        serial_print(" Size=");
-        serial_print_hex(entry->num_sectors);
-        serial_print(" sectors\n");
+        LOG_INFO("DISK", "Partition %x: Type=%x Start=%x Size=%x sectors",
+                 (uint32_t)i,
+                 (uint32_t)entry->partition_type,
+                 entry->lba_start,
+                 entry->num_sectors);
     }
 
     return 0;
@@ -96,7 +88,7 @@ static int read_partition_table(uint8_t drive)
 
 void partition_init(void)
 {
-    serial_print("Scanning for partitions...\n");
+    LOG_INFO("DISK", "Scanning for partitions...");
 
     partition_count = 0;
 
@@ -106,9 +98,7 @@ void partition_init(void)
         read_partition_table(drive);
     }
 
-    serial_print("Found ");
-    serial_print_hex(partition_count);
-    serial_print(" partitions\n");
+    LOG_INFO("DISK", "Found %x partitions", (uint32_t)partition_count);
 }
 
 partition_info_t *partition_get(uint8_t drive, uint8_t partition_index)
@@ -126,50 +116,55 @@ partition_info_t *partition_get(uint8_t drive, uint8_t partition_index)
 
 void partition_list(void)
 {
-    serial_print("=== Detected Partitions ===\n");
+    LOG_INFO("DISK", "=== Detected Partitions ===");
 
     for (int i = 0; i < partition_count; i++)
     {
         partition_info_t *p = &partitions[i];
 
-        serial_print("Drive ");
-        serial_print_hex(p->drive);
-        serial_print(", Partition ");
-        serial_print_hex(p->partition_index);
-        serial_print(": ");
-
+        const char *type_name;
         switch (p->type)
         {
         case PART_TYPE_FAT16:
-            serial_print("FAT16");
+            type_name = "FAT16";
             break;
         case PART_TYPE_FAT32:
         case PART_TYPE_FAT32_LBA:
-            serial_print("FAT32");
+            type_name = "FAT32";
             break;
         case PART_TYPE_NTFS:
-            serial_print("NTFS");
+            type_name = "NTFS";
             break;
         case PART_TYPE_LINUX:
-            serial_print("Linux");
+            type_name = "Linux";
             break;
         case PART_TYPE_LINUX_SWAP:
-            serial_print("Linux Swap");
+            type_name = "Linux Swap";
             break;
         default:
-            serial_print("Type ");
-            serial_print_hex(p->type);
+            type_name = NULL;
         }
 
-        serial_print(", Start LBA: ");
-        serial_print_hex(p->lba_start);
-        serial_print(", Sectors: ");
-        serial_print_hex(p->num_sectors);
-
-        if (p->bootable)
-            serial_print(" [BOOTABLE]");
-
-        serial_print("\n");
+        if (type_name)
+        {
+            LOG_INFO("DISK", "Drive %x, Partition %x: %s, Start LBA: %x, Sectors: %x%s",
+                     (uint32_t)p->drive,
+                     (uint32_t)p->partition_index,
+                     type_name,
+                     p->lba_start,
+                     p->num_sectors,
+                     p->bootable ? " [BOOTABLE]" : "");
+        }
+        else
+        {
+            LOG_INFO("DISK", "Drive %x, Partition %x: Type %x, Start LBA: %x, Sectors: %x%s",
+                     (uint32_t)p->drive,
+                     (uint32_t)p->partition_index,
+                     (uint32_t)p->type,
+                     p->lba_start,
+                     p->num_sectors,
+                     p->bootable ? " [BOOTABLE]" : "");
+        }
     }
 }
 
@@ -182,7 +177,7 @@ int partition_read(partition_info_t *partition, uint32_t sector, uint8_t *buffer
 
     if (sector >= partition->num_sectors)
     {
-        serial_print("Read beyond partition bounds\n");
+        LOG_WARN("DISK", "Read beyond partition bounds");
         return -1;
     }
 
@@ -199,7 +194,7 @@ int partition_write(partition_info_t *partition, uint32_t sector, uint8_t *buffe
 
     if (sector >= partition->num_sectors)
     {
-        serial_print("Write beyond partition bounds\n");
+        LOG_WARN("DISK", "Write beyond partition bounds");
         return -1;
     }
 
@@ -209,9 +204,7 @@ int partition_write(partition_info_t *partition, uint32_t sector, uint8_t *buffe
 // Create MBR with partitions on an empty drive
 int partition_create_mbr(uint8_t drive, uint32_t total_sectors)
 {
-    serial_print("Creating MBR partition table on drive ");
-    serial_print_hex(drive);
-    serial_print("\n");
+    LOG_INFO("DISK", "Creating MBR partition table on drive %x", (uint32_t)drive);
 
     uint8_t mbr_buffer[512];
     memset(mbr_buffer, 0, 512);
@@ -257,25 +250,18 @@ int partition_create_mbr(uint8_t drive, uint32_t total_sectors)
     mbr->signature = 0xAA55;
 
     // Write MBR to sector 0
-    serial_print("Writing MBR to disk...\n");
+    LOG_INFO("DISK", "Writing MBR to disk...");
     if (ata_write_sector(drive, 0, mbr_buffer) != 0)
     {
-        serial_print("Failed to write MBR\n");
+        LOG_ERROR("DISK", "Failed to write MBR");
         return -1;
     }
 
-    serial_print("MBR created successfully!\n");
-    serial_print("Partition 1: Start=");
-    serial_print_hex(partition1_start);
-    serial_print(", Size=");
-    serial_print_hex(partition1_size);
-    serial_print(" sectors (bootable)\n");
-
-    serial_print("Partition 2: Start=");
-    serial_print_hex(partition2_start);
-    serial_print(", Size=");
-    serial_print_hex(partition2_size);
-    serial_print(" sectors\n");
+    LOG_INFO("DISK", "MBR created successfully!");
+    LOG_INFO("DISK", "Partition 1: Start=%x, Size=%x sectors (bootable)",
+             partition1_start, partition1_size);
+    LOG_INFO("DISK", "Partition 2: Start=%x, Size=%x sectors",
+             partition2_start, partition2_size);
 
     return 0;
 }
@@ -286,9 +272,7 @@ int partition_create_mbr_custom(uint8_t drive,
                                 uint32_t part2_start, uint32_t part2_size,
                                 uint8_t part1_type, uint8_t part2_type)
 {
-    serial_print("Creating custom MBR on drive ");
-    serial_print_hex(drive);
-    serial_print("\n");
+    LOG_INFO("DISK", "Creating custom MBR on drive %x", (uint32_t)drive);
 
     uint8_t mbr_buffer[512];
     memset(mbr_buffer, 0, 512);
@@ -310,13 +294,8 @@ int partition_create_mbr_custom(uint8_t drive,
         mbr->partitions[0].last_chs[1] = 0xFF;
         mbr->partitions[0].last_chs[2] = 0xFF;
 
-        serial_print("Partition 1: Type=");
-        serial_print_hex(part1_type);
-        serial_print(", Start=");
-        serial_print_hex(part1_start);
-        serial_print(", Size=");
-        serial_print_hex(part1_size);
-        serial_print(" sectors\n");
+        LOG_INFO("DISK", "Partition 1: Type=%x, Start=%x, Size=%x sectors",
+                 (uint32_t)part1_type, part1_start, part1_size);
     }
 
     // Partition 2
@@ -334,13 +313,8 @@ int partition_create_mbr_custom(uint8_t drive,
         mbr->partitions[1].last_chs[1] = 0xFF;
         mbr->partitions[1].last_chs[2] = 0xFF;
 
-        serial_print("Partition 2: Type=");
-        serial_print_hex(part2_type);
-        serial_print(", Start=");
-        serial_print_hex(part2_start);
-        serial_print(", Size=");
-        serial_print_hex(part2_size);
-        serial_print(" sectors\n");
+        LOG_INFO("DISK", "Partition 2: Type=%x, Start=%x, Size=%x sectors",
+                 (uint32_t)part2_type, part2_start, part2_size);
     }
 
     // Set MBR signature
@@ -349,26 +323,24 @@ int partition_create_mbr_custom(uint8_t drive,
     // Write MBR
     if (ata_write_sector(drive, 0, mbr_buffer) != 0)
     {
-        serial_print("Failed to write MBR\n");
+        LOG_ERROR("DISK", "Failed to write MBR");
         return -1;
     }
 
-    serial_print("Custom MBR created successfully!\n");
+    LOG_INFO("DISK", "Custom MBR created successfully!");
     return 0;
 }
 
 // Auto-partition: detects disk size and creates MBR
 int partition_auto_create(uint8_t drive)
 {
-    serial_print("Auto-partitioning drive ");
-    serial_print_hex(drive);
-    serial_print("\n");
+    LOG_INFO("DISK", "Auto-partitioning drive %x", (uint32_t)drive);
 
     uint16_t identify[256];
 
     if (ata_identify_device(drive, identify) != 0)
     {
-        serial_print("Could not detect disk size (IDENTIFY DEVICE failed)\n");
+        LOG_ERROR("DISK", "Could not detect disk size (IDENTIFY DEVICE failed)");
         return -1;
     }
 
@@ -392,27 +364,24 @@ int partition_auto_create(uint8_t drive)
 
     if (total_sectors == 0)
     {
-        serial_print("Detected zero-sized disk\n");
+        LOG_ERROR("DISK", "Detected zero-sized disk");
         return -1;
     }
 
-    serial_print("Detected disk size: ");
-    serial_print_hex((uint32_t)total_sectors);
-    serial_print(" sectors (");
-    serial_print_hex((uint32_t)(total_sectors / 2048));
-    serial_print(" MB)\n");
+    LOG_INFO("DISK", "Detected disk size: %x sectors (%x MB)",
+             (uint32_t)total_sectors, (uint32_t)(total_sectors / 2048));
 
     /* MBR limit: 2^32 − 1 sectors */
     if (total_sectors > 0xFFFFFFFFULL)
     {
-        serial_print("Disk too large for MBR, GPT required\n");
+        LOG_ERROR("DISK", "Disk too large for MBR, GPT required");
         return -1;
     }
 
     /* Require minimum space for alignment + partitions */
     if (total_sectors < 4096)
     {
-        serial_print("Disk too small for partitioning\n");
+        LOG_ERROR("DISK", "Disk too small for partitioning");
         return -1;
     }
 

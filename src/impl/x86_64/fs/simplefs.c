@@ -2,7 +2,8 @@
 #include <disk/block_device.h>
 #include <fs/vfs.h>
 #include <memory/heap.h>
-#include <shell/shell.h>
+#include <utils/log.h>
+#include <drivers/serial.h>
 #include <utils/string.h>
 
 simplefs_superblock_t simplefs_superblock;
@@ -23,7 +24,7 @@ static struct vfs_node *simplefs_vfs_finddir(struct vfs_node *node, const char *
 
 void simplefs_init(block_device_t *block_device)
 {
-    serial_print("Initializing SimpleFS.\n");
+    LOG_INFO("FS", "Initializing SimpleFS");
 
     // Allocate root VFS node
     simplefs_root = (vfs_node_t *)kmalloc(sizeof(vfs_node_t));
@@ -66,18 +67,18 @@ void simplefs_init(block_device_t *block_device)
     vfs_set_root(simplefs_root);
     simplefs_block_device = block_device;
 
-    serial_print("SimpleFS initialized.\n");
+    LOG_INFO("FS", "SimpleFS initialized");
 }
 
 void simplefs_format(block_device_t *block_device, uint32_t total_blocks, int reserved_blocks)
 {
-    serial_print("Formatting SimpleFS...\n");
+    LOG_INFO("FS", "Formatting SimpleFS...");
 
     // Allocate superblock on heap to avoid stack overflow
     simplefs_superblock_t *sb = (simplefs_superblock_t *)kmalloc(sizeof(simplefs_superblock_t));
     if (!sb)
     {
-        serial_print("ERROR: Failed to allocate superblock\n");
+        LOG_ERROR("FS", "Failed to allocate superblock");
         return;
     }
 
@@ -106,7 +107,7 @@ void simplefs_format(block_device_t *block_device, uint32_t total_blocks, int re
     int result = block_device->write_block(block_device, 0, (uint8_t *)sb);
     if (result != 0)
     {
-        serial_print("ERROR: Failed to write superblock\n");
+        LOG_ERROR("FS", "Failed to write superblock");
         kfree(sb);
         return;
     }
@@ -118,14 +119,14 @@ void simplefs_format(block_device_t *block_device, uint32_t total_blocks, int re
     result = block_device->read_block(block_device, 0, (uint8_t *)sb);
     if (result != 0)
     {
-        serial_print("ERROR: Failed to read back superblock\n");
+        LOG_ERROR("FS", "Failed to read back superblock");
         kfree(sb);
         return;
     }
 
     if (sb->header.magic != SIMPLEFS_MAGIC)
     {
-        serial_print("ERROR: Superblock verification failed!\n");
+        LOG_ERROR("FS", "Superblock verification failed!");
         kfree(sb);
         return;
     }
@@ -143,11 +144,11 @@ void simplefs_format(block_device_t *block_device, uint32_t total_blocks, int re
     uint8_t *block_buffer = (uint8_t *)kmalloc(block_device->block_size);
     if (!block_buffer)
     {
-        serial_print("Failed to allocate block buffer\n");
+        LOG_ERROR("FS", "Failed to allocate block buffer");
         return;
     }
 
-    serial_print("Writing directory blocks...\n");
+    LOG_INFO("FS", "Writing directory blocks...");
 
     uint32_t entry_idx = 0;
     for (uint32_t block = 0; block < blocks_needed; block++)
@@ -171,23 +172,23 @@ void simplefs_format(block_device_t *block_device, uint32_t total_blocks, int re
         int write_result = block_device->write_block(block_device, reserved_blocks + block, block_buffer);
         if (write_result != 0)
         {
-            serial_print("ERROR: Failed to write directory block\n");
+            LOG_ERROR("FS", "Failed to write directory block");
             kfree(block_buffer);
             return;
         }
     }
 
     kfree(block_buffer);
-    serial_print("SimpleFS formatted successfully.\n");
+    LOG_INFO("FS", "SimpleFS formatted successfully");
 }
 
 int simplefs_mount(block_device_t *block_device)
 {
-    serial_print("Mounting SimpleFS...\n");
+    LOG_INFO("FS", "Mounting SimpleFS...");
 
     if (!simplefs_fs)
     {
-        serial_print("ERROR: simplefs_fs not initialized!\n");
+        LOG_ERROR("FS", "simplefs_fs not initialized!");
         return -1;
     }
 
@@ -198,19 +199,19 @@ int simplefs_mount(block_device_t *block_device)
     int result = block_device->read_block(block_device, 0, (uint8_t *)&sb);
     if (result != 0)
     {
-        serial_print("Failed to read superblock\n");
+        LOG_ERROR("FS", "Failed to read superblock");
         return -1;
     }
 
     if (sb.header.magic != 0x53465321)
     {
-        serial_print("Invalid filesystem magic!\n");
+        LOG_ERROR("FS", "Invalid filesystem magic!");
         return -1;
     }
 
     if (sb.header.version > 1)
     {
-        serial_print("Unsupported filesystem version\n");
+        LOG_ERROR("FS", "Unsupported filesystem version");
         return -1;
     }
 
@@ -221,9 +222,7 @@ int simplefs_mount(block_device_t *block_device)
     simplefs_fs->superblock = sb;
     simplefs_fs->device = block_device;
 
-    serial_print("Mounted SimpleFS v");
-    serial_print_hex(sb.header.version);
-    serial_print("\n");
+    LOG_INFO("FS", "Mounted SimpleFS v%x", (uint32_t)sb.header.version);
 
     return 0;
 }
@@ -347,7 +346,7 @@ int simplefs_list_dir(uint32_t dir_inode_number)
     if (!block_buffer)
         return -1;
 
-    serial_print("Directory listing:\n");
+    LOG_INFO("FS", "Directory listing:");
     int count = 0;
 
     uint32_t entries_per_block = 512 / sizeof(simplefs_dir_entry_t);
@@ -371,9 +370,7 @@ int simplefs_list_dir(uint32_t dir_inode_number)
         {
             if (entries[e].inode_number != 0xFFFFFFFF && entries[e].inode_number < 256)
             {
-                serial_print(" - ");
-                serial_print(entries[e].name);
-                serial_print("\n");
+                LOG_INFO("FS", " - %s", entries[e].name);
                 count++;
             }
         }
@@ -381,7 +378,7 @@ int simplefs_list_dir(uint32_t dir_inode_number)
 
     if (count == 0)
     {
-        serial_print(" (empty)\n");
+        LOG_INFO("FS", " (empty)");
     }
 
     kfree(block_buffer);
@@ -539,15 +536,15 @@ int simplefs_delete_file(uint32_t dir_inode_number, const char *filename)
 
 void kernel_test_filesystem(void)
 {
-    serial_print("\n=== Filesystem Test Suite ===\n\n");
+    LOG_DEBUG("FS", "\n=== Filesystem Test Suite ===\n");
 
     // Test 1: List empty directory
-    serial_print("[Test 1] Listing empty directory:\n");
+    LOG_DEBUG("FS", "[Test 1] Listing empty directory:");
     simplefs_list_dir(0);
-    serial_print("\n");
+    LOG_DEBUG("FS", "");
 
     // Test 2: Create some test files
-    serial_print("[Test 2] Creating test files...\n");
+    LOG_DEBUG("FS", "[Test 2] Creating test files...");
 
     const char *test_files[] = {
         "hello.txt",
@@ -564,30 +561,25 @@ void kernel_test_filesystem(void)
     uint32_t inode;
     for (int i = 0; i < 10; i++)
     {
-        serial_print("  Creating: ");
-        serial_print(test_files[i]);
-
         int result = simplefs_create_file(0, test_files[i], &inode);
         if (result == 0)
         {
-            serial_print(" - OK (inode ");
-            serial_print_hex(inode);
-            serial_print(")\n");
+            LOG_DEBUG("FS", "  Creating: %s - OK (inode %x)", test_files[i], (uint32_t)inode);
         }
         else
         {
-            serial_print(" - FAILED\n");
+            LOG_DEBUG("FS", "  Creating: %s - FAILED", test_files[i]);
         }
     }
-    serial_print("\n");
+    LOG_DEBUG("FS", "");
 
     // Test 3: List directory with files
-    serial_print("[Test 3] Listing directory with files:\n");
+    LOG_DEBUG("FS", "[Test 3] Listing directory with files:");
     simplefs_list_dir(0);
-    serial_print("\n");
+    LOG_DEBUG("FS", "");
 
     // Test 4: Write data to files
-    serial_print("[Test 4] Writing data to files...\n");
+    LOG_DEBUG("FS", "[Test 4] Writing data to files...");
 
     const char *test_data[] = {
         "Hello, World!",
@@ -606,12 +598,6 @@ void kernel_test_filesystem(void)
         uint32_t file_inode;
         if (simplefs_find_file(0, test_files[i], &file_inode) == 0)
         {
-            serial_print("  Writing to ");
-            serial_print(test_files[i]);
-            serial_print(" (inode ");
-            serial_print_hex(file_inode);
-            serial_print("): ");
-
             uint32_t len = 0;
             while (test_data[i][len])
                 len++;
@@ -619,20 +605,18 @@ void kernel_test_filesystem(void)
             int result = simplefs_write_file(file_inode, (const uint8_t *)test_data[i], len, 0);
             if (result >= 0)
             {
-                serial_print("OK (");
-                serial_print_hex(result);
-                serial_print(" bytes)\n");
+                LOG_DEBUG("FS", "  Writing to %s (inode %x): OK (%x bytes)", test_files[i], (uint32_t)file_inode, (uint32_t)result);
             }
             else
             {
-                serial_print("FAILED\n");
+                LOG_DEBUG("FS", "  Writing to %s (inode %x): FAILED", test_files[i], (uint32_t)file_inode);
             }
         }
     }
-    serial_print("\n");
+    LOG_DEBUG("FS", "");
 
     // Test 5: Read data from files
-    serial_print("[Test 5] Reading data from files...\n");
+    LOG_DEBUG("FS", "[Test 5] Reading data from files...");
 
     uint8_t read_buffer[256];
     for (int i = 0; i < 10; i++)
@@ -640,17 +624,13 @@ void kernel_test_filesystem(void)
         uint32_t file_inode;
         if (simplefs_find_file(0, test_files[i], &file_inode) == 0)
         {
-            serial_print("  Reading ");
-            serial_print(test_files[i]);
-            serial_print(": ");
-
             for (int j = 0; j < 256; j++)
                 read_buffer[j] = 0;
 
             int bytes_read = simplefs_read_file(file_inode, read_buffer, 256, 0);
             if (bytes_read > 0)
             {
-                serial_print("\"");
+                LOG_DEBUG("FS", "  Reading %s: \"", test_files[i]);
                 for (int j = 0; j < bytes_read && j < 50; j++)
                 {
                     if (read_buffer[j] >= 32 && read_buffer[j] < 127)
@@ -664,104 +644,78 @@ void kernel_test_filesystem(void)
             }
             else
             {
-                serial_print("FAILED\n");
+                LOG_DEBUG("FS", "  Reading %s: FAILED", test_files[i]);
             }
         }
     }
-    serial_print("\n");
+    LOG_DEBUG("FS", "");
 
     // Test 6: Find specific files
-    serial_print("[Test 6] Finding specific files...\n");
+    LOG_DEBUG("FS", "[Test 6] Finding specific files...");
 
     const char *search_files[] = {"hello.txt", "nonexistent.txt", "kernel.bin"};
     for (int i = 0; i < 3; i++)
     {
-        serial_print("  Looking for: ");
-        serial_print(search_files[i]);
-        serial_print(" - ");
-
         uint32_t found_inode;
         if (simplefs_find_file(0, search_files[i], &found_inode) == 0)
         {
-            serial_print("FOUND (inode ");
-            serial_print_hex(found_inode);
-            serial_print(")\n");
+            LOG_DEBUG("FS", "  Looking for: %s - FOUND (inode %x)", search_files[i], (uint32_t)found_inode);
         }
         else
         {
-            serial_print("NOT FOUND\n");
+            LOG_DEBUG("FS", "  Looking for: %s - NOT FOUND", search_files[i]);
         }
     }
-    serial_print("\n");
+    LOG_DEBUG("FS", "");
 
     // Test 7: Delete some files
-    serial_print("[Test 7] Deleting files...\n");
+    LOG_DEBUG("FS", "[Test 7] Deleting files...");
 
     const char *delete_files[] = {"temp.tmp", "test.log", "data.dat"};
     for (int i = 0; i < 3; i++)
     {
-        serial_print("  Deleting: ");
-        serial_print(delete_files[i]);
-        serial_print(" - ");
-
         if (simplefs_delete_file(0, delete_files[i]) == 0)
         {
-            serial_print("OK\n");
+            LOG_DEBUG("FS", "  Deleting: %s - OK", delete_files[i]);
         }
         else
         {
-            serial_print("FAILED\n");
+            LOG_DEBUG("FS", "  Deleting: %s - FAILED", delete_files[i]);
         }
     }
-    serial_print("\n");
+    LOG_DEBUG("FS", "");
 
     // Test 8: List directory after deletions
-    serial_print("[Test 8] Listing directory after deletions:\n");
+    LOG_DEBUG("FS", "[Test 8] Listing directory after deletions:");
     simplefs_list_dir(0);
-    serial_print("\n");
+    LOG_DEBUG("FS", "");
 
     // Test 9: Verify deleted files are gone
-    serial_print("[Test 9] Verifying deleted files...\n");
+    LOG_DEBUG("FS", "[Test 9] Verifying deleted files...");
     for (int i = 0; i < 3; i++)
     {
-        serial_print("  Checking: ");
-        serial_print(delete_files[i]);
-        serial_print(" - ");
-
         uint32_t found_inode;
         if (simplefs_find_file(0, delete_files[i], &found_inode) == 0)
         {
-            serial_print("ERROR: Still exists!\n");
+            LOG_DEBUG("FS", "  Checking: %s - ERROR: Still exists!", delete_files[i]);
         }
         else
         {
-            serial_print("Correctly deleted\n");
+            LOG_DEBUG("FS", "  Checking: %s - Correctly deleted", delete_files[i]);
         }
     }
-    serial_print("\n");
+    LOG_DEBUG("FS", "");
 
     // Test 10: Heap statistics
-    serial_print("[Test 10] Heap statistics:\n");
+    LOG_DEBUG("FS", "[Test 10] Heap statistics:");
     uint32_t total, used, free;
     heap_stats(&total, &used, &free);
-    serial_print("  Total: ");
-    serial_print_hex(total);
-    serial_print(" bytes (");
-    serial_print_hex(total / 1024);
-    serial_print(" KB)\n");
-    serial_print("  Used:  ");
-    serial_print_hex(used);
-    serial_print(" bytes (");
-    serial_print_hex(used / 1024);
-    serial_print(" KB)\n");
-    serial_print("  Free:  ");
-    serial_print_hex(free);
-    serial_print(" bytes (");
-    serial_print_hex(free / 1024);
-    serial_print(" KB)\n");
-    serial_print("\n");
+    LOG_DEBUG("FS", "  Total: %x bytes (%x KB)", total, total / 1024);
+    LOG_DEBUG("FS", "  Used:  %x bytes (%x KB)", used, used / 1024);
+    LOG_DEBUG("FS", "  Free:  %x bytes (%x KB)", free, free / 1024);
+    LOG_DEBUG("FS", "");
 
-    serial_print("=== Filesystem Test Complete ===\n\n");
+    LOG_DEBUG("FS", "=== Filesystem Test Complete ===\n");
 }
 
 // Create some sample files for testing
@@ -769,11 +723,11 @@ void simplefs_create_sample_files(void)
 {
     if (!simplefs_fs || !simplefs_fs->device)
     {
-        serial_print("Cannot create sample files: filesystem not mounted\n");
+        LOG_DEBUG("FS", "Cannot create sample files: filesystem not mounted");
         return;
     }
 
-    serial_print("Creating sample files...\n");
+    LOG_DEBUG("FS", "Creating sample files...");
 
     // Create and write test files
     struct
@@ -795,16 +749,14 @@ void simplefs_create_sample_files(void)
             while (files[i].content[len])
                 len++;
             simplefs_write_file(inode, (const uint8_t *)files[i].content, len, 0);
-            serial_print("  Created: ");
-            serial_print(files[i].name);
-            serial_print("\n");
+            LOG_DEBUG("FS", "  Created: %s", files[i].name);
         }
     }
 
-    serial_print("Sample files created.\n");
+    LOG_DEBUG("FS", "Sample files created");
 
     // Verify by listing directory
-    serial_print("Directory contents:\n");
+    LOG_DEBUG("FS", "Directory contents:");
     simplefs_list_dir(0);
 }
 

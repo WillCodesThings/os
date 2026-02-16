@@ -1,6 +1,6 @@
 #include <fs/tmpfs.h>
 #include <fs/vfs.h>
-#include <shell/shell.h>
+#include <utils/log.h>
 #include <memory/heap.h>
 
 #define MAX_FILES 64
@@ -220,7 +220,7 @@ static int tmpfs_create(vfs_node_t *parent, const char *name, uint32_t flags)
 
 void tmpfs_init(void)
 {
-    serial_print("Initializing tmpfs...\n");
+    LOG_INFO("FS", "Initializing tmpfs...");
 
     // Create root directory
     static vfs_node_t root;
@@ -244,7 +244,7 @@ void tmpfs_init(void)
     extern void vfs_set_root(vfs_node_t * root);
     vfs_set_root(&root);
 
-    serial_print("tmpfs mounted as root\n");
+    LOG_INFO("FS", "tmpfs mounted as root");
 
     // Create some test files
     vfs_node_t *readme = tmpfs_create_file(&root, "readme.txt", VFS_FILE);
@@ -255,14 +255,14 @@ void tmpfs_init(void)
         while (content[len])
             len++;
         tmpfs_write(readme, 0, len, (uint8_t *)content);
-        serial_print("Created /readme.txt\n");
+        LOG_DEBUG("FS", "Created /readme.txt");
     }
 
     // Create a directory
     vfs_node_t *docs = tmpfs_create_file(&root, "docs", VFS_DIRECTORY);
     if (docs)
     {
-        serial_print("Created /docs directory\n");
+        LOG_DEBUG("FS", "Created /docs directory");
 
         // Create file in docs
         vfs_node_t *test = tmpfs_create_file(docs, "test.txt", VFS_FILE);
@@ -273,7 +273,7 @@ void tmpfs_init(void)
             while (content[len])
                 len++;
             tmpfs_write(test, 0, len, (uint8_t *)content);
-            serial_print("Created /docs/test.txt\n");
+            LOG_DEBUG("FS", "Created /docs/test.txt");
         }
     }
 }

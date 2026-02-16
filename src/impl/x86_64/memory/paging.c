@@ -1,6 +1,6 @@
 #include <memory/paging.h>
 #include <memory/heap.h>
-#include <shell/shell.h>
+#include <utils/log.h>
 #include <stdint.h>
 
 // Provided by boot assembly after parsing the Multiboot2 memory map
@@ -9,29 +9,26 @@ extern uint64_t total_physical_memory;
 // Page table entry flags
 #define PTE_PRESENT  (1ULL << 0)
 #define PTE_WRITABLE (1ULL << 1)
-#define PTE_HUGE     (1ULL << 7)  // 2MB page (used in PD entries)
+#define PTE_HUGE     (1ULL << 7) // 2MB page (used in PD entries)
 
 // Each PD table covers 1GB (512 entries * 2MB huge pages)
-#define GB (1ULL << 30)
-#define MB (1ULL << 20)
-#define PAGE_TABLE_SIZE 4096
+#define GB                (1ULL << 30)
+#define MB                (1ULL << 20)
+#define PAGE_TABLE_SIZE   4096
 #define ENTRIES_PER_TABLE 512
-#define MIN_MAPPED_BYTES (4ULL * GB)  // Always map at least 4GB for MMIO/framebuffer
+#define MIN_MAPPED_BYTES  (4ULL * GB) // Always map at least 4GB for MMIO/framebuffer
 
 static uint32_t num_pd_tables = 0;
 static uint32_t num_pdpt_tables = 0;
 static uint32_t total_tables = 0;
 
-void paging_init(void)
-{
+void paging_init(void) {
     uint64_t total_mem = total_physical_memory;
 
-    serial_print("Paging: detected ");
-    serial_print_dec((uint32_t)(total_mem / MB));
-    serial_print(" MB physical memory\n");
+    LOG_INFO("MEM", "Detected %u MB physical memory", (uint32_t)(total_mem / MB));
 
     if (total_mem == 0) {
-        serial_print("Paging: WARNING - no memory map detected, skipping\n");
+        LOG_WARN("MEM", "No memory map detected, skipping paging init");
         return;
     }
 
@@ -52,33 +49,26 @@ void paging_init(void)
     // Total: 1 PML4 + PDPTs + PDs
     total_tables = 1 + num_pdpt_tables + num_pd_tables;
 
-    serial_print("Paging: allocating ");
-    serial_print_dec(total_tables);
-    serial_print(" page tables (1 PML4 + ");
-    serial_print_dec(num_pdpt_tables);
-    serial_print(" PDPT + ");
-    serial_print_dec(num_pd_tables);
-    serial_print(" PD)\n");
+    LOG_INFO("MEM", "Allocating %u page tables (1 PML4 + %u PDPT + %u PD)", total_tables,
+             num_pdpt_tables, num_pd_tables);
 
     // Allocate PML4 table
     uint64_t *pml4 = (uint64_t *)kmalloc_aligned(PAGE_TABLE_SIZE, PAGE_TABLE_SIZE);
     if (!pml4) {
-        serial_print("Paging: failed to allocate PML4\n");
+        LOG_ERROR("MEM", "Failed to allocate PML4");
         return;
     }
-    for (int i = 0; i < ENTRIES_PER_TABLE; i++)
-        pml4[i] = 0;
+    for (int i = 0; i < ENTRIES_PER_TABLE; i++) pml4[i] = 0;
 
     // Allocate PDPT table(s)
-    uint64_t *pdpt_tables[1] = {0};  // Realistically only 1 PDPT for < 512GB
+    uint64_t *pdpt_tables[1] = {0}; // Realistically only 1 PDPT for < 512GB
     for (uint32_t i = 0; i < num_pdpt_tables; i++) {
         pdpt_tables[i] = (uint64_t *)kmalloc_aligned(PAGE_TABLE_SIZE, PAGE_TABLE_SIZE);
         if (!pdpt_tables[i]) {
-            serial_print("Paging: failed to allocate PDPT\n");
+            LOG_ERROR("MEM", "Failed to allocate PDPT");
             return;
         }
-        for (int j = 0; j < ENTRIES_PER_TABLE; j++)
-            pdpt_tables[i][j] = 0;
+        for (int j = 0; j < ENTRIES_PER_TABLE; j++) pdpt_tables[i][j] = 0;
 
         // Point PML4 entry to this PDPT
         pml4[i] = (uint64_t)(uintptr_t)pdpt_tables[i] | PTE_PRESENT | PTE_WRITABLE;
@@ -88,7 +78,7 @@ void paging_init(void)
     for (uint32_t i = 0; i < num_pd_tables; i++) {
         uint64_t *pd = (uint64_t *)kmalloc_aligned(PAGE_TABLE_SIZE, PAGE_TABLE_SIZE);
         if (!pd) {
-            serial_print("Paging: failed to allocate PD\n");
+            LOG_ERROR("MEM", "Failed to allocate PD");
             return;
         }
 
@@ -108,15 +98,13 @@ void paging_init(void)
     uint64_t pml4_addr = (uint64_t)(uintptr_t)pml4;
     __asm__ volatile("mov %0, %%cr3" : : "r"(pml4_addr) : "memory");
 
-    serial_print("Paging: page tables allocated and loaded into CR3\n");
+    LOG_INFO("MEM", "Page tables allocated and loaded into CR3");
 }
 
-uint64_t paging_get_total_memory(void)
-{
+uint64_t paging_get_total_memory(void) {
     return total_physical_memory;
 }
 
-uint32_t paging_get_table_count(void)
-{
+uint32_t paging_get_table_count(void) {
     return total_tables;
 }

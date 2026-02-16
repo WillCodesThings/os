@@ -1,0 +1,47 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker toolchain
+        run: docker build -t my-os buildenv/
+
+      - name: Build release kernel
+        run: docker run --rm -v ${{ github.workspace }}:/root/env my-os make
+
+      - name: Build debug kernel
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/root/env my-os make clean
+          docker run --rm -v ${{ github.workspace }}:/root/env my-os make BUILD=debug
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86
+
+      - name: Rebuild release for smoke test
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/root/env my-os make clean
+          docker run --rm -v ${{ github.workspace }}:/root/env my-os make
+
+      - name: Run smoke test
+        run: bash scripts/smoke-test.sh dist/x86_64/kernel.iso 20
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: kernel-iso
+          path: dist/x86_64/kernel.iso
+          retention-days: 7

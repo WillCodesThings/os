@@ -2,7 +2,6 @@
 #include <disk/partition.h>
 #include <disk/block_device.h>
 #include <memory/heap.h>
-#include <shell/shell.h>
 typedef struct
 {
     block_device_t base;

@@ -7,7 +7,6 @@
 #include <graphics/cursor.h>
 
 #include <shell/print.h>
-#include <shell/shell.h>
 
 #include <disk/partition.h>
 #include <disk/partition_block_device.h>
@@ -19,36 +18,37 @@
 #include <fs/tmpfs.h>
 
 #include <memory/heap.h>
+#include <utils/log.h>
 
 void kernel_filesystem_init(void)
 {
-    serial_print("\n=== Filesystem Initialization ===\n");
+    LOG_INFO("FS", "=== Filesystem Initialization ===");
 
-    serial_print("\n[1/7] Scanning for partitions...\n");
+    LOG_INFO("FS", "[1/7] Scanning for partitions...");
     partition_init();
 
-    serial_print("\n[2/7] Initializing ATA block devices...\n");
+    LOG_INFO("FS", "[2/7] Initializing ATA block devices...");
 
     partition_info_t *p = partition_get(ATA_PRIMARY_MASTER, 0);
     if (!p)
     {
-        serial_print("No partitions found on primary master!\n");
+        LOG_WARN("FS", "No partitions found on primary master");
         if (partition_auto_create(ATA_PRIMARY_MASTER) != 0)
         {
-            serial_print("No disk available - falling back to tmpfs\n");
+            LOG_WARN("FS", "No disk available - falling back to tmpfs");
             tmpfs_init();
-            serial_print("\n=== Filesystem Initialization Complete (tmpfs) ===\n\n");
+            LOG_INFO("FS", "=== Filesystem Initialization Complete (tmpfs) ===");
             return;
         }
-        serial_print("Auto MBR Partitioning successful!\n");
-        serial_print("Attempting to re-initialize partitions...\n");
+        LOG_INFO("FS", "Auto MBR partitioning successful");
+        LOG_INFO("FS", "Re-initializing partitions...");
         partition_init();
         p = partition_get(ATA_PRIMARY_MASTER, 0);
         if (!p)
         {
-            serial_print("Failed to re-initialize partitions - falling back to tmpfs\n");
+            LOG_WARN("FS", "Failed to re-initialize partitions - falling back to tmpfs");
             tmpfs_init();
-            serial_print("\n=== Filesystem Initialization Complete (tmpfs) ===\n\n");
+            LOG_INFO("FS", "=== Filesystem Initialization Complete (tmpfs) ===");
             return;
         }
     }
@@ -57,28 +57,28 @@ void kernel_filesystem_init(void)
     block_device_t *part = partition_create_block_device(p);
     (void)part;  // Suppress unused warning
 
-    serial_print("\n[3/7] Detected partitions:\n");
+    LOG_INFO("FS", "[3/7] Detected partitions:");
     partition_list();
 
-    serial_print("\n[4/7] Initializing VFS...\n");
+    LOG_INFO("FS", "[4/7] Initializing VFS...");
     vfs_init();
 
-    serial_print("\n[5/7] Initializing mount system...\n");
+    LOG_INFO("FS", "[5/7] Initializing mount system...");
     vfs_mount_init();
 
-    serial_print("\n[6/7] Mounting root filesystem...\n");
+    LOG_INFO("FS", "[6/7] Mounting root filesystem...");
     if (vfs_mount_partition("/", ATA_PRIMARY_MASTER, 0, "simplefs") == 0)
     {
-        serial_print("SUCCESS: Root filesystem mounted!\n");
+        LOG_INFO("FS", "Root filesystem mounted successfully");
     }
     else
     {
-        serial_print("ERROR: Failed to mount simplefs - falling back to tmpfs\n");
+        LOG_ERROR("FS", "Failed to mount simplefs - falling back to tmpfs");
         tmpfs_init();
     }
 
-    serial_print("\n[7/7] Current mount configuration:\n");
+    LOG_INFO("FS", "[7/7] Current mount configuration:");
     vfs_list_mounts();
 
-    serial_print("\n=== Filesystem Initialization Complete ===\n\n");
+    LOG_INFO("FS", "=== Filesystem Initialization Complete ===");
 }

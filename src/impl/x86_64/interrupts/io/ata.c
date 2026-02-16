@@ -1,8 +1,7 @@
 #include <interrupts/io/ata.h>
 #include <interrupts/idt.h>
 #include <interrupts/port_io.h>
-#include <shell/shell.h>
-#include <shell/print.h>
+#include <utils/log.h>
 
 // Forward declaration of assembly handler
 extern void ata_primary_interrupt_handler(void);
@@ -73,9 +72,7 @@ void ata_primary_handle_interrupt(void)
     if (ata_primary.status & ATA_SR_ERR)
     {
         ata_primary.error = inb(ata_primary.io_base + ATA_REG_ERROR);
-        serial_print("ATA Primary Error: ");
-        serial_print_hex(ata_primary.error);
-        serial_print("\n");
+        LOG_ERROR("ATA", "Primary error: %x", (uint32_t)ata_primary.error);
     }
 
     // interrupt was received
@@ -92,9 +89,7 @@ void ata_secondary_handle_interrupt(void)
     if (ata_secondary.status & ATA_SR_ERR)
     {
         ata_secondary.error = inb(ata_secondary.io_base + ATA_REG_ERROR);
-        serial_print("ATA Secondary Error: ");
-        serial_print_hex(ata_secondary.error);
-        serial_print("\n");
+        LOG_ERROR("ATA", "Secondary error: %x", (uint32_t)ata_secondary.error);
     }
 
     // Set flag to indicate interrupt was received
@@ -103,7 +98,7 @@ void ata_secondary_handle_interrupt(void)
 
 void ata_init(void)
 {
-    serial_print("Initializing ATA controller...\n");
+    LOG_INFO("ATA", "Initializing ATA controller...");
 
     // Initialize primary bus
     ata_primary.io_base = ATA_PRIMARY_IO;
@@ -140,7 +135,7 @@ void ata_init(void)
     ata_wait_ready(&ata_secondary);
 
     // Register handlers
-    serial_print("Registering ATA interrupt handlers\n");
+    LOG_DEBUG("ATA", "Registering ATA interrupt handlers");
     idt_set_gate(0x2E, (uint64_t)ata_primary_interrupt_handler);   // IRQ 14 (Primary)
     idt_set_gate(0x2F, (uint64_t)ata_secondary_interrupt_handler); // IRQ 15 (Secondary)
 
@@ -155,7 +150,7 @@ void ata_init(void)
     follower_mask &= ~(1 << 7); // IRQ15 (secondary ATA)
     outb(0xA1, follower_mask);
 
-    serial_print("ATA controller initialized!\n");
+    LOG_INFO("ATA", "ATA controller initialized");
 }
 
 int ata_identify_device(uint8_t drive, uint16_t *identify)
@@ -188,7 +183,7 @@ int ata_identify_device(uint8_t drive, uint16_t *identify)
 
     if (status & ATA_SR_ERR)
     {
-        serial_print("ATA IDENTIFY error\n");
+        LOG_ERROR("ATA", "IDENTIFY error");
         return -1;
     }
 
@@ -220,7 +215,7 @@ int ata_wait_irq(ata_device_t *dev)
         }
     }
 
-    serial_print("ATA IRQ timeout\n");
+    LOG_WARN("ATA", "IRQ timeout");
     return -1; // Timeout
 }
 

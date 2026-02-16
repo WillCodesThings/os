@@ -15,6 +15,38 @@ LINKER     := targets/x86_64/linker.ld
 
 INCLUDES   := -I src/intf
 
+# --- Pretty output ---
+BLUE   := \033[34m
+GREEN  := \033[32m
+YELLOW := \033[33m
+RED    := \033[31m
+BOLD   := \033[1m
+RESET  := \033[0m
+
+# --- QEMU configuration ---
+QEMU       := qemu-system-x86_64
+QEMU_MEM   := 256M
+QEMU_NET   := -netdev user,id=net0 -device e1000,netdev=net0
+QEMU_SERIAL := -serial mon:stdio
+QEMU_DEBUG_FLAGS := -s -S
+
+# --- Disk image (set DISK=disk.img to attach a hard drive) ---
+DISK ?=
+DISK_SIZE ?= 64M
+
+ifneq ($(DISK),)
+    QEMU_DISK := -drive file=$(DISK),format=raw,index=0,media=disk
+else
+    QEMU_DISK :=
+endif
+
+QEMU_FLAGS := -cdrom $(DIST_DIR)/kernel.iso \
+              -m $(QEMU_MEM) \
+              $(QEMU_NET) \
+              $(QEMU_SERIAL) \
+              $(QEMU_DISK)
+
+# --- Compiler flags ---
 CFLAGS := -ffreestanding $(INCLUDES) \
           -Wall -Wextra \
           -Werror=implicit-function-declaration \
@@ -41,39 +73,93 @@ ARCH_ASM_OBJ := $(patsubst $(SRC_ARCH)/%.asm, $(BUILD_DIR)/x86_64/%.o, $(ARCH_AS
 
 OBJS := $(KERNEL_OBJ) $(ARCH_C_OBJ) $(ARCH_ASM_OBJ)
 
-
-.PHONY: all clean check
+.PHONY: all clean check run debug run-debug docker-build docker-debug test watch disk
 
 all: $(DIST_DIR)/kernel.iso
 
 # --- Kernel C files ---
 $(BUILD_DIR)/kernel/%.o: $(SRC_KERNEL)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) -c $(CFLAGS) $< -o $@
+	@printf "  $(BLUE)CC$(RESET)    %s\n" "$<"
+	@$(CC) -c $(CFLAGS) $< -o $@
 
 # --- Arch-specific C files ---
 $(BUILD_DIR)/x86_64/%.o: $(SRC_ARCH)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) -c $(CFLAGS) $< -o $@
+	@printf "  $(BLUE)CC$(RESET)    %s\n" "$<"
+	@$(CC) -c $(CFLAGS) $< -o $@
 
 # --- Assembly files ---
 $(BUILD_DIR)/x86_64/%.o: $(SRC_ARCH)/%.asm
 	@mkdir -p $(dir $@)
-	$(AS) -f elf64 $< -o $@
+	@printf "  $(YELLOW)AS$(RESET)    %s\n" "$<"
+	@$(AS) -f elf64 $< -o $@
 
 # --- Link kernel binary ---
 $(DIST_DIR)/kernel.bin: $(OBJS) $(LINKER)
 	@mkdir -p $(DIST_DIR)
-	$(LD) -n -o $@ -T $(LINKER) $(OBJS)
+	@printf "  $(GREEN)LD$(RESET)    kernel.bin (%d objects)\n" $(words $(OBJS))
+	@$(LD) -n -o $@ -T $(LINKER) $(OBJS)
 
 # --- Create bootable ISO ---
 $(DIST_DIR)/kernel.iso: $(DIST_DIR)/kernel.bin
-	cp $(DIST_DIR)/kernel.bin $(ISO_DIR)/boot/kernel.bin
-	grub-mkrescue /usr/lib/grub/i386-pc -o $@ $(ISO_DIR)
+	@cp $(DIST_DIR)/kernel.bin $(ISO_DIR)/boot/kernel.bin
+	@printf "  $(GREEN)ISO$(RESET)   kernel.iso\n"
+	@grub-mkrescue /usr/lib/grub/i386-pc -o $@ $(ISO_DIR) 2>/dev/null
+	@printf "$(BOLD)$(GREEN)Build complete!$(RESET) -> $(DIST_DIR)/kernel.iso\n"
+
+# --- Run in QEMU (host) ---
+run:
+	@if [ ! -f $(DIST_DIR)/kernel.iso ]; then \
+		printf "$(BOLD)$(GREEN)Building kernel in Docker...$(RESET)\n"; \
+		docker run --rm -v $$(pwd):/root/env my-os make; \
+	fi
+	@printf "$(BOLD)$(GREEN)Launching QEMU...$(RESET)\n"
+	$(QEMU) $(QEMU_FLAGS)
+
+# --- Build debug kernel ---
+debug:
+	@printf "$(BOLD)$(YELLOW)Building debug kernel...$(RESET)\n"
+	$(MAKE) BUILD=debug all
+
+# --- Run with GDB server (paused, waiting for debugger) ---
+run-debug:
+	@printf "$(BOLD)$(YELLOW)Building debug kernel in Docker...$(RESET)\n"
+	docker run --rm -v $$(pwd):/root/env my-os make BUILD=debug
+	@printf "$(BOLD)$(YELLOW)Launching QEMU with GDB server on :1234$(RESET)\n"
+	@printf "Attach with: $(BOLD)cd $$(pwd) && x86_64-elf-gdb$(RESET) (auto-loads .gdbinit, type 'qc' then 'c')\n"
+	$(QEMU) $(QEMU_FLAGS) $(QEMU_DEBUG_FLAGS)
+
+# --- Docker build helpers (run on host) ---
+docker-build:
+	docker run --rm -v $$(pwd):/root/env my-os make
+
+docker-debug:
+	docker run --rm -v $$(pwd):/root/env my-os make BUILD=debug
 
 check:
 	@echo "Checking for implicit declarations..."
 	@! grep -R "implicit declaration" $(BUILD_DIR) || false
+
+# --- Smoke test (headless QEMU boot verification) ---
+test:
+	@printf "$(BOLD)$(YELLOW)Building kernel in Docker...$(RESET)\n"
+	@docker run --rm -v $$(pwd):/root/env my-os make
+	@printf "$(BOLD)$(YELLOW)Running smoke test...$(RESET)\n"
+	@bash scripts/smoke-test.sh $(DIST_DIR)/kernel.iso 15
+
+# --- Create raw disk image ---
+disk:
+	@if [ -f disk.img ]; then \
+		printf "$(YELLOW)disk.img already exists (use 'rm disk.img' to recreate)$(RESET)\n"; \
+	else \
+		printf "$(BOLD)$(GREEN)Creating disk.img ($(DISK_SIZE))...$(RESET)\n"; \
+		qemu-img create -f raw disk.img $(DISK_SIZE); \
+	fi
+
+# --- File watcher (auto-rebuild + relaunch QEMU) ---
+watch:
+	@DISK="$(DISK)" bash scripts/watch.sh
 
 clean:
 	rm -rf $(BUILD_DIR) dist

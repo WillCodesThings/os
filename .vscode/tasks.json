@@ -1,99 +1,127 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Build Kernel (Docker)",
-            "type": "shell",
-            "command": "docker",
-            "args": ["run", "--rm", "-v", "${workspaceFolder}:/root/env", "my-os", "make"],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": {
-                "owner": "gcc",
-                "fileLocation": ["relative", "${workspaceFolder}"],
-                "pattern": {
-                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                    "file": 1,
-                    "line": 2,
-                    "column": 3,
-                    "severity": 4,
-                    "message": 5
-                }
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared"
-            }
-        },
-        {
-            "label": "Build Debug Kernel (Docker)",
-            "type": "shell",
-            "command": "docker",
-            "args": ["run", "--rm", "-v", "${workspaceFolder}:/root/env", "my-os", "make", "BUILD=debug"],
-            "problemMatcher": {
-                "owner": "gcc",
-                "fileLocation": ["relative", "${workspaceFolder}"],
-                "pattern": {
-                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                    "file": 1,
-                    "line": 2,
-                    "column": 3,
-                    "severity": 4,
-                    "message": 5
-                }
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared"
-            }
-        },
-        {
-            "label": "Launch QEMU Debug",
-            "type": "shell",
-            "command": "DISK_FLAG=''; [ -f disk.img ] && DISK_FLAG='-drive file=disk.img,format=raw,index=0,media=disk'; echo 'QEMU_GDB_READY' && eval qemu-system-x86_64 -cdrom dist/x86_64/kernel.iso -m 256M -netdev user,id=net0 -device e1000,netdev=net0 -serial mon:stdio $DISK_FLAG -s -S",
-            "isBackground": true,
-            "problemMatcher": {
-                "pattern": {
-                    "regexp": "^$"
-                },
-                "background": {
-                    "activeOnStart": true,
-                    "beginsPattern": "QEMU_GDB_READY",
-                    "endsPattern": "QEMU_GDB_READY"
-                }
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "dedicated"
-            }
-        },
-        {
-            "label": "Debug: Build and Launch QEMU",
-            "dependsOn": ["Build Debug Kernel (Docker)", "Launch QEMU Debug"],
-            "dependsOrder": "sequence",
-            "problemMatcher": []
-        },
-        {
-            "label": "Create Disk Image",
-            "type": "shell",
-            "command": "qemu-img",
-            "args": ["create", "-f", "raw", "disk.img", "64M"],
-            "problemMatcher": []
-        },
-        {
-            "label": "Clean",
-            "type": "shell",
-            "command": "docker",
-            "args": ["run", "--rm", "-v", "${workspaceFolder}:/root/env", "my-os", "make", "clean"],
-            "problemMatcher": []
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Kernel (Docker)",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-v",
+        "${workspaceFolder}:/root/env",
+        "my-os",
+        "make"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": {
+        "owner": "gcc",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
         }
-    ]
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Build Debug Kernel (Docker)",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-v",
+        "${workspaceFolder}:/root/env",
+        "my-os",
+        "make",
+        "BUILD=debug"
+      ],
+      "problemMatcher": {
+        "owner": "gcc",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Launch QEMU Debug",
+      "type": "shell",
+      "windows": {
+        "command": "DISK_FLAG=''; [ -f disk.img ] && DISK_FLAG='-drive file=disk.img,format=raw,index=0,media=disk'; echo 'QEMU_GDB_READY' && eval qemu-system-x86_64 -cdrom dist/x86_64/kernel.iso -m 256M -netdev user,id=net0 -device e1000,netdev=net0 -serial mon:stdio $DISK_FLAG -s -S"
+      },
+      "osx": {
+        "command": "DISK_FLAG=''; [ -f disk.img ] && DISK_FLAG='-drive file=disk.img,format=raw,index=0,media=disk'; echo 'QEMU_GDB_READY' && eval qemu-system-x86_64 -cdrom dist/x86_64/kernel.iso -m 256M -netdev user,id=net0 -device e1000,netdev=net0 -serial mon:stdio $DISK_FLAG -s -S"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "QEMU_GDB_READY",
+          "endsPattern": "QEMU_GDB_READY"
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Debug: Build and Launch QEMU",
+      "dependsOn": ["Build Debug Kernel (Docker)", "Launch QEMU Debug"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Create Disk Image",
+      "type": "shell",
+      "command": "qemu-img",
+      "args": ["create", "-f", "raw", "disk.img", "64M"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean",
+      "type": "shell",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-v",
+        "${workspaceFolder}:/root/env",
+        "my-os",
+        "make",
+        "clean"
+      ],
+      "problemMatcher": []
+    }
+  ]
 }

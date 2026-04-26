@@ -10,19 +10,19 @@
 #include "interrupts/port_io.h"
 #include "net/net.h"
 #include "net/socket.h"
-#include "drivers/e1000.h"
+#include "drivers/impls/e1000.h"
 
 // Colors
-#define COLOR_BG        0x1E1E1E
-#define COLOR_TEXT      0x00FF00
-#define COLOR_CURSOR    0x00FF00
-#define COLOR_PROMPT    0x00AAFF
+#define COLOR_BG     0x1E1E1E
+#define COLOR_TEXT   0x00FF00
+#define COLOR_CURSOR 0x00FF00
+#define COLOR_PROMPT 0x00AAFF
 
 // Layout
-#define CHAR_WIDTH      8
-#define CHAR_HEIGHT     8
-#define LINE_HEIGHT     10
-#define PROMPT_STR      "> "
+#define CHAR_WIDTH  8
+#define CHAR_HEIGHT 8
+#define LINE_HEIGHT 10
+#define PROMPT_STR  "> "
 
 // Forward declarations for internal command handlers
 static void guiterm_cmd_help(gui_terminal_t *term);
@@ -33,7 +33,8 @@ static void guiterm_cmd_echo(gui_terminal_t *term, const char *text);
 
 // Helper to draw a character to the window
 static void draw_term_char(window_t *win, char ch, int x, int y, uint32_t color) {
-    if (ch < 32 || ch >= 127) return;
+    if (ch < 32 || ch >= 127)
+        return;
     for (int cy = 0; cy < 8; cy++) {
         for (int cx = 0; cx < 8; cx++) {
             if (font_8x8[(int)ch][cy] & (1 << (7 - cx))) {
@@ -55,7 +56,8 @@ static void draw_term_string(window_t *win, const char *str, int x, int y, uint3
 // Paint callback
 static void guiterminal_paint(window_t *win) {
     gui_terminal_t *term = (gui_terminal_t *)win->user_data;
-    if (!term) return;
+    if (!term)
+        return;
 
     // Clear background
     window_clear(win, COLOR_BG);
@@ -64,7 +66,8 @@ static void guiterminal_paint(window_t *win) {
     int visible_lines = (win->content_height - LINE_HEIGHT) / LINE_HEIGHT;
     int start_line = term->scroll_offset;
     int end_line = start_line + visible_lines;
-    if (end_line > term->line_count) end_line = term->line_count;
+    if (end_line > term->line_count)
+        end_line = term->line_count;
 
     // Draw output lines
     int y = 2;
@@ -113,7 +116,8 @@ static void add_output_line(gui_terminal_t *term, const char *text) {
 
     // Copy text to new line
     int len = strlen(text);
-    if (len > GUITERM_MAX_LINE_LEN - 1) len = GUITERM_MAX_LINE_LEN - 1;
+    if (len > GUITERM_MAX_LINE_LEN - 1)
+        len = GUITERM_MAX_LINE_LEN - 1;
     memcpy(term->lines[term->line_count], text, len);
     term->lines[term->line_count][len] = '\0';
     term->line_count++;
@@ -219,7 +223,8 @@ static void execute_command(gui_terminal_t *term) {
         char err[80] = "Unknown command: ";
         int err_len = strlen(err);
         int cmd_len = strlen(cmd);
-        if (cmd_len > 60) cmd_len = 60;
+        if (cmd_len > 60)
+            cmd_len = 60;
         memcpy(err + err_len, cmd, cmd_len);
         err[err_len + cmd_len] = '\0';
         add_output_line(term, err);
@@ -272,7 +277,8 @@ static void guiterm_cmd_ls(gui_terminal_t *term, const char *path) {
     char header[80] = "Contents of ";
     int hlen = strlen(header);
     int plen = strlen(path);
-    if (plen > 60) plen = 60;
+    if (plen > 60)
+        plen = 60;
     memcpy(header + hlen, path, plen);
     header[hlen + plen] = ':';
     header[hlen + plen + 1] = '\0';
@@ -355,47 +361,80 @@ static void guiterm_cmd_heap(gui_terminal_t *term) {
 
     // Format: "  Total: XXXXX KB"
     int pos = 0;
-    line[pos++] = ' '; line[pos++] = ' ';
-    line[pos++] = 'T'; line[pos++] = 'o'; line[pos++] = 't';
-    line[pos++] = 'a'; line[pos++] = 'l'; line[pos++] = ':';
+    line[pos++] = ' ';
+    line[pos++] = ' ';
+    line[pos++] = 'T';
+    line[pos++] = 'o';
+    line[pos++] = 't';
+    line[pos++] = 'a';
+    line[pos++] = 'l';
+    line[pos++] = ':';
     line[pos++] = ' ';
     uint32_t kb = total / 1024;
-    if (kb >= 10000) line[pos++] = '0' + (kb / 10000) % 10;
-    if (kb >= 1000) line[pos++] = '0' + (kb / 1000) % 10;
-    if (kb >= 100) line[pos++] = '0' + (kb / 100) % 10;
-    if (kb >= 10) line[pos++] = '0' + (kb / 10) % 10;
+    if (kb >= 10000)
+        line[pos++] = '0' + (kb / 10000) % 10;
+    if (kb >= 1000)
+        line[pos++] = '0' + (kb / 1000) % 10;
+    if (kb >= 100)
+        line[pos++] = '0' + (kb / 100) % 10;
+    if (kb >= 10)
+        line[pos++] = '0' + (kb / 10) % 10;
     line[pos++] = '0' + kb % 10;
-    line[pos++] = ' '; line[pos++] = 'K'; line[pos++] = 'B';
+    line[pos++] = ' ';
+    line[pos++] = 'K';
+    line[pos++] = 'B';
     line[pos] = '\0';
     add_output_line(term, line);
 
     pos = 0;
-    line[pos++] = ' '; line[pos++] = ' ';
-    line[pos++] = 'U'; line[pos++] = 's'; line[pos++] = 'e';
-    line[pos++] = 'd'; line[pos++] = ':'; line[pos++] = ' ';
+    line[pos++] = ' ';
+    line[pos++] = ' ';
+    line[pos++] = 'U';
+    line[pos++] = 's';
+    line[pos++] = 'e';
+    line[pos++] = 'd';
+    line[pos++] = ':';
+    line[pos++] = ' ';
     line[pos++] = ' ';
     kb = used / 1024;
-    if (kb >= 10000) line[pos++] = '0' + (kb / 10000) % 10;
-    if (kb >= 1000) line[pos++] = '0' + (kb / 1000) % 10;
-    if (kb >= 100) line[pos++] = '0' + (kb / 100) % 10;
-    if (kb >= 10) line[pos++] = '0' + (kb / 10) % 10;
+    if (kb >= 10000)
+        line[pos++] = '0' + (kb / 10000) % 10;
+    if (kb >= 1000)
+        line[pos++] = '0' + (kb / 1000) % 10;
+    if (kb >= 100)
+        line[pos++] = '0' + (kb / 100) % 10;
+    if (kb >= 10)
+        line[pos++] = '0' + (kb / 10) % 10;
     line[pos++] = '0' + kb % 10;
-    line[pos++] = ' '; line[pos++] = 'K'; line[pos++] = 'B';
+    line[pos++] = ' ';
+    line[pos++] = 'K';
+    line[pos++] = 'B';
     line[pos] = '\0';
     add_output_line(term, line);
 
     pos = 0;
-    line[pos++] = ' '; line[pos++] = ' ';
-    line[pos++] = 'F'; line[pos++] = 'r'; line[pos++] = 'e';
-    line[pos++] = 'e'; line[pos++] = ':'; line[pos++] = ' ';
+    line[pos++] = ' ';
+    line[pos++] = ' ';
+    line[pos++] = 'F';
+    line[pos++] = 'r';
+    line[pos++] = 'e';
+    line[pos++] = 'e';
+    line[pos++] = ':';
+    line[pos++] = ' ';
     line[pos++] = ' ';
     kb = free_mem / 1024;
-    if (kb >= 10000) line[pos++] = '0' + (kb / 10000) % 10;
-    if (kb >= 1000) line[pos++] = '0' + (kb / 1000) % 10;
-    if (kb >= 100) line[pos++] = '0' + (kb / 100) % 10;
-    if (kb >= 10) line[pos++] = '0' + (kb / 10) % 10;
+    if (kb >= 10000)
+        line[pos++] = '0' + (kb / 10000) % 10;
+    if (kb >= 1000)
+        line[pos++] = '0' + (kb / 1000) % 10;
+    if (kb >= 100)
+        line[pos++] = '0' + (kb / 100) % 10;
+    if (kb >= 10)
+        line[pos++] = '0' + (kb / 10) % 10;
     line[pos++] = '0' + kb % 10;
-    line[pos++] = ' '; line[pos++] = 'K'; line[pos++] = 'B';
+    line[pos++] = ' ';
+    line[pos++] = 'K';
+    line[pos++] = 'B';
     line[pos] = '\0';
     add_output_line(term, line);
 }
@@ -518,7 +557,8 @@ static void guiterm_cmd_reboot(gui_terminal_t *term) {
 
 // Helper to parse IP address
 static uint32_t guiterm_parse_ip(const char *str) {
-    if (!str || !*str) return 0;
+    if (!str || !*str)
+        return 0;
 
     uint8_t octets[4] = {0};
     int octet_idx = 0;
@@ -529,9 +569,11 @@ static uint32_t guiterm_parse_ip(const char *str) {
         if (*str >= '0' && *str <= '9') {
             value = value * 10 + (*str - '0');
             has_digit = 1;
-            if (value > 255) return 0;
+            if (value > 255)
+                return 0;
         } else if (*str == '.') {
-            if (!has_digit || octet_idx >= 3) return 0;
+            if (!has_digit || octet_idx >= 3)
+                return 0;
             octets[octet_idx++] = value;
             value = 0;
             has_digit = 0;
@@ -541,7 +583,8 @@ static uint32_t guiterm_parse_ip(const char *str) {
         str++;
     }
 
-    if (!has_digit || octet_idx != 3) return 0;
+    if (!has_digit || octet_idx != 3)
+        return 0;
     octets[octet_idx] = value;
 
     return ip_to_uint32(octets[0], octets[1], octets[2], octets[3]);
@@ -607,8 +650,8 @@ static void guiterm_cmd_wget(gui_terminal_t *term, const char *args) {
     add_output_line(term, "Connecting...");
     window_invalidate(term->window);
 
-    // Allocate buffer
-    #define WGET_BUF_SIZE (256 * 1024)
+// Allocate buffer
+#define WGET_BUF_SIZE (256 * 1024)
     uint8_t *response = (uint8_t *)kmalloc(WGET_BUF_SIZE);
     if (!response) {
         add_output_line(term, "Out of memory");
@@ -622,8 +665,8 @@ static void guiterm_cmd_wget(gui_terminal_t *term, const char *args) {
         uint8_t *body = response;
         int body_len = len;
         for (int k = 0; k < len - 3; k++) {
-            if (response[k] == '\r' && response[k+1] == '\n' &&
-                response[k+2] == '\r' && response[k+3] == '\n') {
+            if (response[k] == '\r' && response[k + 1] == '\n' && response[k + 2] == '\r' &&
+                response[k + 3] == '\n') {
                 body = response + k + 4;
                 body_len = len - (k + 4);
                 break;
@@ -635,10 +678,14 @@ static void guiterm_cmd_wget(gui_terminal_t *term, const char *args) {
         const char *recv = "Received ";
         while (*recv) msg[pos++] = *recv++;
         int bl = body_len;
-        if (bl >= 10000) msg[pos++] = '0' + (bl / 10000) % 10;
-        if (bl >= 1000) msg[pos++] = '0' + (bl / 1000) % 10;
-        if (bl >= 100) msg[pos++] = '0' + (bl / 100) % 10;
-        if (bl >= 10) msg[pos++] = '0' + (bl / 10) % 10;
+        if (bl >= 10000)
+            msg[pos++] = '0' + (bl / 10000) % 10;
+        if (bl >= 1000)
+            msg[pos++] = '0' + (bl / 1000) % 10;
+        if (bl >= 100)
+            msg[pos++] = '0' + (bl / 100) % 10;
+        if (bl >= 10)
+            msg[pos++] = '0' + (bl / 10) % 10;
         msg[pos++] = '0' + bl % 10;
         const char *bytes = " bytes";
         while (*bytes) msg[pos++] = *bytes++;
@@ -714,13 +761,12 @@ static void guiterm_cmd_bgimg(gui_terminal_t *term, const char *file) {
 // Create GUI terminal
 gui_terminal_t *guiterminal_create(const char *title, int32_t x, int32_t y) {
     gui_terminal_t *term = (gui_terminal_t *)kcalloc(1, sizeof(gui_terminal_t));
-    if (!term) return 0;
+    if (!term)
+        return 0;
 
     // Create window
-    term->window = window_create(title, x, y,
-                                 GUITERM_WIDTH, GUITERM_HEIGHT,
-                                 WINDOW_FLAG_VISIBLE | WINDOW_FLAG_MOVABLE |
-                                 WINDOW_FLAG_CLOSABLE);
+    term->window = window_create(title, x, y, GUITERM_WIDTH, GUITERM_HEIGHT,
+                                 WINDOW_FLAG_VISIBLE | WINDOW_FLAG_MOVABLE | WINDOW_FLAG_CLOSABLE);
 
     if (!term->window) {
         kfree(term);
@@ -748,7 +794,8 @@ gui_terminal_t *guiterminal_create(const char *title, int32_t x, int32_t y) {
 
 // Handle keyboard input
 void guiterminal_handle_key(gui_terminal_t *term, char c) {
-    if (!term) return;
+    if (!term)
+        return;
 
     if (c == '\n') {
         // Execute command
@@ -775,7 +822,8 @@ void guiterminal_handle_key(gui_terminal_t *term, char c) {
 
 // Print text to terminal
 void guiterminal_print(gui_terminal_t *term, const char *text) {
-    if (!term || !text) return;
+    if (!term || !text)
+        return;
 
     // Split text into lines
     char line[GUITERM_MAX_LINE_LEN];
@@ -803,7 +851,8 @@ void guiterminal_print(gui_terminal_t *term, const char *text) {
 
 // Print line to terminal
 void guiterminal_println(gui_terminal_t *term, const char *text) {
-    if (!term) return;
+    if (!term)
+        return;
     if (text) {
         add_output_line(term, text);
     } else {

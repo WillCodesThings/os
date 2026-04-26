@@ -1,4 +1,4 @@
-#include "drivers/e1000.h"
+#include "drivers/impls/e1000.h"
 #include "drivers/pci.h"
 #include "interrupts/port_io.h"
 #include "interrupts/idt.h"
@@ -31,7 +31,7 @@ static int e1000_read_eeprom(uint8_t addr, uint16_t *data) {
     // Wait for completion
     for (int i = 0; i < 1000; i++) {
         temp = e1000_read(E1000_EERD);
-        if (temp & (1 << 4)) {  // Done bit
+        if (temp & (1 << 4)) { // Done bit
             *data = (uint16_t)((temp >> 16) & 0xFFFF);
             return 0;
         }
@@ -73,17 +73,19 @@ static void e1000_read_mac_address(void) {
 // Initialize RX descriptors
 static int e1000_init_rx(void) {
     // Allocate descriptor ring (128-byte aligned for best compatibility)
-    e1000_dev.rx_descs = (e1000_rx_desc_t *)kmalloc_aligned(
-        sizeof(e1000_rx_desc_t) * E1000_NUM_RX_DESC, 128);
+    e1000_dev.rx_descs =
+        (e1000_rx_desc_t *)kmalloc_aligned(sizeof(e1000_rx_desc_t) * E1000_NUM_RX_DESC, 128);
 
-    if (!e1000_dev.rx_descs) return -1;
+    if (!e1000_dev.rx_descs)
+        return -1;
 
     memset(e1000_dev.rx_descs, 0, sizeof(e1000_rx_desc_t) * E1000_NUM_RX_DESC);
 
     // Allocate buffers for each descriptor
     for (int i = 0; i < E1000_NUM_RX_DESC; i++) {
         e1000_dev.rx_buffers[i] = (uint8_t *)kmalloc_aligned(E1000_RX_BUFFER_SIZE, 16);
-        if (!e1000_dev.rx_buffers[i]) return -1;
+        if (!e1000_dev.rx_buffers[i])
+            return -1;
 
         e1000_dev.rx_descs[i].addr = (uint64_t)e1000_dev.rx_buffers[i];
         e1000_dev.rx_descs[i].status = 0;
@@ -99,10 +101,9 @@ static int e1000_init_rx(void) {
     e1000_dev.rx_cur = 0;
 
     // Enable receiver
-    uint32_t rctl = E1000_RCTL_EN |
-                    E1000_RCTL_BAM |        // Accept broadcast
-                    E1000_RCTL_BSIZE_2048 | // 2048 byte buffers
-                    E1000_RCTL_SECRC;       // Strip CRC
+    uint32_t rctl = E1000_RCTL_EN | E1000_RCTL_BAM | // Accept broadcast
+                    E1000_RCTL_BSIZE_2048 |          // 2048 byte buffers
+                    E1000_RCTL_SECRC;                // Strip CRC
 
     e1000_write(E1000_RCTL, rctl);
 
@@ -112,20 +113,22 @@ static int e1000_init_rx(void) {
 // Initialize TX descriptors
 static int e1000_init_tx(void) {
     // Allocate descriptor ring (128-byte aligned for best compatibility)
-    e1000_dev.tx_descs = (e1000_tx_desc_t *)kmalloc_aligned(
-        sizeof(e1000_tx_desc_t) * E1000_NUM_TX_DESC, 128);
+    e1000_dev.tx_descs =
+        (e1000_tx_desc_t *)kmalloc_aligned(sizeof(e1000_tx_desc_t) * E1000_NUM_TX_DESC, 128);
 
-    if (!e1000_dev.tx_descs) return -1;
+    if (!e1000_dev.tx_descs)
+        return -1;
 
     memset(e1000_dev.tx_descs, 0, sizeof(e1000_tx_desc_t) * E1000_NUM_TX_DESC);
 
     // Allocate buffers for each descriptor
     for (int i = 0; i < E1000_NUM_TX_DESC; i++) {
         e1000_dev.tx_buffers[i] = (uint8_t *)kmalloc_aligned(E1000_TX_BUFFER_SIZE, 16);
-        if (!e1000_dev.tx_buffers[i]) return -1;
+        if (!e1000_dev.tx_buffers[i])
+            return -1;
 
         e1000_dev.tx_descs[i].addr = (uint64_t)e1000_dev.tx_buffers[i];
-        e1000_dev.tx_descs[i].status = E1000_TXD_STAT_DD;  // Mark as done initially
+        e1000_dev.tx_descs[i].status = E1000_TXD_STAT_DD; // Mark as done initially
         e1000_dev.tx_descs[i].cmd = 0;
     }
 
@@ -143,10 +146,9 @@ static int e1000_init_tx(void) {
     e1000_write(E1000_TIPG, (10 << 0) | (10 << 10) | (10 << 20));
 
     // Enable transmitter
-    uint32_t tctl = E1000_TCTL_EN |
-                    E1000_TCTL_PSP |           // Pad short packets
-                    (15 << E1000_TCTL_CT_SHIFT) | // Collision threshold
-                    (64 << E1000_TCTL_COLD_SHIFT); // Collision distance
+    uint32_t tctl = E1000_TCTL_EN | E1000_TCTL_PSP | // Pad short packets
+                    (15 << E1000_TCTL_CT_SHIFT) |    // Collision threshold
+                    (64 << E1000_TCTL_COLD_SHIFT);   // Collision distance
 
     e1000_write(E1000_TCTL, tctl);
 
@@ -171,7 +173,7 @@ int e1000_init(void) {
     }
 
     if (!pci) {
-        return -1;  // No network card found
+        return -1; // No network card found
     }
 
     e1000_dev.pci_dev = pci;
@@ -183,7 +185,7 @@ int e1000_init(void) {
     // Get MMIO base address from BAR0 (may be 64-bit)
     e1000_dev.mmio_base = pci_get_bar_address64(pci, 0);
     if (!e1000_dev.mmio_base) {
-        return -2;  // No MMIO base
+        return -2; // No MMIO base
     }
 
     // Reset the device
@@ -245,7 +247,7 @@ int e1000_send_packet(const void *data, size_t length) {
     }
 
     if (length > E1000_TX_BUFFER_SIZE) {
-        return -2;  // Packet too large
+        return -2; // Packet too large
     }
 
     uint16_t cur = e1000_dev.tx_cur;
@@ -257,7 +259,7 @@ int e1000_send_packet(const void *data, size_t length) {
         timeout--;
     }
     if (timeout == 0) {
-        return -3;  // Timeout waiting for descriptor
+        return -3; // Timeout waiting for descriptor
     }
 
     // Copy data to buffer
@@ -283,7 +285,7 @@ int e1000_send_packet(const void *data, size_t length) {
     }
 
     if (!(desc->status & E1000_TXD_STAT_DD)) {
-        return -4;  // TX didn't complete
+        return -4; // TX didn't complete
     }
 
     return length;
@@ -300,7 +302,7 @@ int e1000_receive_packet(void *buffer, size_t max_length) {
 
     // Check if packet available
     if (!(desc->status & E1000_RXD_STAT_DD)) {
-        return 0;  // No packet
+        return 0; // No packet
     }
 
     // Get packet length
@@ -348,7 +350,8 @@ void e1000_handle_interrupt(void) {
 
 // Check if link is up
 int e1000_link_up(void) {
-    if (!e1000_dev.initialized) return 0;
+    if (!e1000_dev.initialized)
+        return 0;
     return (e1000_read(E1000_STATUS) & 0x02) != 0;
 }
 
@@ -359,13 +362,15 @@ uint64_t e1000_get_mmio_base(void) {
 
 // Get status register (for debugging)
 uint32_t e1000_get_status(void) {
-    if (!e1000_dev.initialized) return 0;
+    if (!e1000_dev.initialized)
+        return 0;
     return e1000_read(E1000_STATUS);
 }
 
 // Debug: print TX state
 void e1000_debug_tx(void) {
-    if (!e1000_dev.initialized) return;
+    if (!e1000_dev.initialized)
+        return;
 
     extern void print_str(char *);
     extern void print_int(int);

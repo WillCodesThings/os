@@ -26,7 +26,7 @@
 
 // New includes for network manager
 #include <drivers/pci.h>
-#include <drivers/e1000.h>
+#include <drivers/impls/e1000.h>
 #include <net/net.h>
 #include <net/socket.h>
 #include <exec/process.h>

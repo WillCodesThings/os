@@ -1,7 +1,7 @@
 #include "net/net.h"
 #include "net/tcp.h"
 #include "net/udp.h"
-#include "drivers/e1000.h"
+#include "drivers/impls/e1000.h"
 #include "memory/heap.h"
 #include "utils/memory.h"
 #include "shell/print.h"
@@ -30,9 +30,7 @@ uint16_t htons(uint16_t hostshort) {
 }
 
 uint32_t htonl(uint32_t hostlong) {
-    return ((hostlong & 0xFF) << 24) |
-           ((hostlong & 0xFF00) << 8) |
-           ((hostlong >> 8) & 0xFF00) |
+    return ((hostlong & 0xFF) << 24) | ((hostlong & 0xFF00) << 8) | ((hostlong >> 8) & 0xFF00) |
            ((hostlong >> 24) & 0xFF);
 }
 
@@ -104,7 +102,7 @@ int arp_lookup(uint32_t ip, uint8_t *mac) {
             return 0;
         }
     }
-    return -1;  // Not found
+    return -1; // Not found
 }
 
 // Add to ARP cache
@@ -153,21 +151,22 @@ int arp_request(uint32_t ip) {
 
 // Handle ARP packet
 void arp_handle(const uint8_t *packet, size_t length) {
-    if (length < sizeof(eth_header_t) + sizeof(arp_header_t)) return;
+    if (length < sizeof(eth_header_t) + sizeof(arp_header_t))
+        return;
 
     const arp_header_t *arp = (const arp_header_t *)(packet + sizeof(eth_header_t));
 
     // Only handle Ethernet/IPv4 ARP
-    if (ntohs(arp->hardware_type) != ARP_HARDWARE_ETHERNET) return;
-    if (ntohs(arp->protocol_type) != ETH_TYPE_IPV4) return;
+    if (ntohs(arp->hardware_type) != ARP_HARDWARE_ETHERNET)
+        return;
+    if (ntohs(arp->protocol_type) != ETH_TYPE_IPV4)
+        return;
 
     // Add sender to cache
     arp_cache_add(arp->sender_ip, arp->sender_mac);
 
     // Handle ARP request for our IP
-    if (ntohs(arp->operation) == ARP_OPERATION_REQUEST &&
-        arp->target_ip == local_ip) {
-
+    if (ntohs(arp->operation) == ARP_OPERATION_REQUEST && arp->target_ip == local_ip) {
         // Send ARP reply
         uint8_t reply[sizeof(eth_header_t) + sizeof(arp_header_t)];
 
@@ -215,7 +214,8 @@ uint16_t ip_checksum(const void *data, size_t length) {
 
 // Send Ethernet frame
 int eth_send(const uint8_t *dest_mac, uint16_t type, const void *data, size_t length) {
-    if (length > 1500) return -1;
+    if (length > 1500)
+        return -1;
 
     uint8_t packet[sizeof(eth_header_t) + 1500];
 
@@ -236,7 +236,7 @@ int ip_send(uint32_t dest_ip, uint8_t protocol, const void *data, size_t length)
     ipv4_header_t *ip = (ipv4_header_t *)packet;
 
     // Fill IP header
-    ip->version_ihl = 0x45;  // IPv4, 5 dwords header
+    ip->version_ihl = 0x45; // IPv4, 5 dwords header
     ip->tos = 0;
     ip->total_length = htons(sizeof(ipv4_header_t) + length);
     ip->id = htons(0);
@@ -282,12 +282,12 @@ int ip_send(uint32_t dest_ip, uint8_t protocol, const void *data, size_t length)
                 print_str("ARP reply received!\n");
                 break;
             }
-            for (volatile int j = 0; j < 50000; j++);  // Delay
+            for (volatile int j = 0; j < 50000; j++); // Delay
         }
 
         if (arp_lookup(next_hop, dest_mac) != 0) {
             print_str("ARP timeout - no reply received\n");
-            return -1;  // ARP failed
+            return -1; // ARP failed
         }
     }
 
@@ -296,12 +296,14 @@ int ip_send(uint32_t dest_ip, uint8_t protocol, const void *data, size_t length)
 
 // Handle IP packet
 void ip_handle(const uint8_t *packet, size_t length) {
-    if (length < sizeof(eth_header_t) + sizeof(ipv4_header_t)) return;
+    if (length < sizeof(eth_header_t) + sizeof(ipv4_header_t))
+        return;
 
     const ipv4_header_t *ip = (const ipv4_header_t *)(packet + sizeof(eth_header_t));
 
     // Verify it's for us
-    if (ip->dest_ip != local_ip && ip->dest_ip != 0xFFFFFFFF) return;
+    if (ip->dest_ip != local_ip && ip->dest_ip != 0xFFFFFFFF)
+        return;
 
     // Handle based on protocol
     size_t ip_header_len = (ip->version_ihl & 0x0F) * 4;
@@ -309,23 +311,24 @@ void ip_handle(const uint8_t *packet, size_t length) {
     size_t payload_len = ntohs(ip->total_length) - ip_header_len;
 
     switch (ip->protocol) {
-        case IP_PROTO_ICMP:
-            icmp_handle(payload, payload_len, ip->src_ip);
-            break;
+    case IP_PROTO_ICMP:
+        icmp_handle(payload, payload_len, ip->src_ip);
+        break;
 
-        case IP_PROTO_UDP:
-            udp_handle(payload, payload_len, ip->src_ip);
-            break;
+    case IP_PROTO_UDP:
+        udp_handle(payload, payload_len, ip->src_ip);
+        break;
 
-        case IP_PROTO_TCP:
-            tcp_handle(payload, payload_len, ip->src_ip);
-            break;
+    case IP_PROTO_TCP:
+        tcp_handle(payload, payload_len, ip->src_ip);
+        break;
     }
 }
 
 // Handle ICMP packet
 void icmp_handle(const uint8_t *packet, size_t length, uint32_t src_ip) {
-    if (length < sizeof(icmp_header_t)) return;
+    if (length < sizeof(icmp_header_t))
+        return;
 
     const icmp_header_t *icmp = (const icmp_header_t *)packet;
 
@@ -342,11 +345,9 @@ void icmp_handle(const uint8_t *packet, size_t length, uint32_t src_ip) {
         reply_icmp->checksum = ip_checksum(reply, reply_len);
 
         ip_send(src_ip, IP_PROTO_ICMP, reply, reply_len);
-    }
-    else if (icmp->type == ICMP_ECHO_REPLY) {
+    } else if (icmp->type == ICMP_ECHO_REPLY) {
         // Check if this is a reply to our ping
-        if (ntohs(icmp->id) == icmp_last_id &&
-            ntohs(icmp->sequence) == icmp_last_seq) {
+        if (ntohs(icmp->id) == icmp_last_id && ntohs(icmp->sequence) == icmp_last_seq) {
             icmp_reply_received = 1;
         }
     }
@@ -354,7 +355,7 @@ void icmp_handle(const uint8_t *packet, size_t length, uint32_t src_ip) {
 
 // Send ICMP echo request
 int icmp_send_echo_request(uint32_t dest_ip, uint16_t id, uint16_t seq) {
-    uint8_t packet[sizeof(icmp_header_t) + 32];  // 32 bytes of data
+    uint8_t packet[sizeof(icmp_header_t) + 32]; // 32 bytes of data
 
     icmp_header_t *icmp = (icmp_header_t *)packet;
     icmp->type = ICMP_ECHO_REQUEST;
@@ -403,16 +404,20 @@ int ping(uint32_t dest_ip, int count) {
         // ~3 second timeout per ping (30000 iterations * 100000 delay)
         for (int j = 0; j < 30000 && !icmp_reply_received; j++) {
             net_process_packet();
-            for (volatile int k = 0; k < 100000; k++);  // Longer delay
+            for (volatile int k = 0; k < 100000; k++); // Longer delay
         }
 
         if (icmp_reply_received) {
             success++;
             print_str("Reply from ");
-            print_int(ip_bytes[0]); print_str(".");
-            print_int(ip_bytes[1]); print_str(".");
-            print_int(ip_bytes[2]); print_str(".");
-            print_int(ip_bytes[3]); print_str(": seq=");
+            print_int(ip_bytes[0]);
+            print_str(".");
+            print_int(ip_bytes[1]);
+            print_str(".");
+            print_int(ip_bytes[2]);
+            print_str(".");
+            print_int(ip_bytes[3]);
+            print_str(": seq=");
             print_int(i + 1);
             print_str("\n");
         } else {
@@ -435,19 +440,20 @@ void net_process_packet(void) {
 
 // Handle received packet
 int net_handle_packet(uint8_t *buffer, size_t length) {
-    if (length < sizeof(eth_header_t)) return -1;
+    if (length < sizeof(eth_header_t))
+        return -1;
 
     eth_header_t *eth = (eth_header_t *)buffer;
     uint16_t type = ntohs(eth->type);
 
     switch (type) {
-        case ETH_TYPE_ARP:
-            arp_handle(buffer, length);
-            break;
+    case ETH_TYPE_ARP:
+        arp_handle(buffer, length);
+        break;
 
-        case ETH_TYPE_IPV4:
-            ip_handle(buffer, length);
-            break;
+    case ETH_TYPE_IPV4:
+        ip_handle(buffer, length);
+        break;
     }
 
     return 0;

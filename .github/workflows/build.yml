@@ -45,3 +45,56 @@ jobs:
           name: kernel-iso
           path: dist/x86_64/kernel.iso
           retention-days: 7
+
+  # Publish the tested ISO and tell willcodesthings.github.io to redeploy with it.
+  publish:
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: os-latest
+      SITE_REPO: WillCodesThings/willcodesthings.github.io
+
+    steps:
+      - name: Download ISO artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: kernel-iso
+
+      - name: Write build info
+        run: |
+          cat > os-build.json <<JSON
+          {
+            "sha": "${{ github.sha }}",
+            "date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "url": "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+          }
+          JSON
+          cat os-build.json
+
+      - name: Publish rolling release
+        run: |
+          notes="Latest kernel.iso built from ${{ github.sha }}. Updated automatically by CI."
+          if gh release view "$RELEASE_TAG" -R "${{ github.repository }}" > /dev/null 2>&1; then
+            gh api -X PATCH "repos/${{ github.repository }}/git/refs/tags/$RELEASE_TAG" \
+              -f sha="${{ github.sha }}" -F force=true > /dev/null
+            gh release edit "$RELEASE_TAG" -R "${{ github.repository }}" --notes "$notes"
+            gh release upload "$RELEASE_TAG" kernel.iso os-build.json -R "${{ github.repository }}" --clobber
+          else
+            gh release create "$RELEASE_TAG" kernel.iso os-build.json -R "${{ github.repository }}" \
+              --target "${{ github.sha }}" --title "Latest build" --notes "$notes" --prerelease
+          fi
+
+      - name: Trigger website deploy
+        env:
+          SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$SITE_DISPATCH_TOKEN" ]; then
+            echo "::warning::SITE_DISPATCH_TOKEN is not set; the website will pick up this ISO on its next deploy."
+            exit 0
+          fi
+          GH_TOKEN="$SITE_DISPATCH_TOKEN" gh api "repos/$SITE_REPO/dispatches" \
+            -f event_type=os-updated -f "client_payload[sha]=${{ github.sha }}"
